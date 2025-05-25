@@ -11,7 +11,9 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB
 # Знайдіть свій chat_id через @userinfobot у Telegram і вставте його сюди.
 # Це потрібно для сповіщень адміністратору про нові товари.
 # Рекомендується використовувати змінні середовища
-ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641')) # <--- ЗАМІНІТЬ НА ВАШ РЕАЛЬНИЙ CHAT_ID АДМІНА (ЦЕ ЦИФРИ)
+# ОБЕРЕЖНО: ВИДАЛЕНО int() та ЗАЛИШЕНО ПЕРЕТВОРЕННЯ на int ТІЛЬКИ ПІСЛЯ ВИДАЛЕННЯ ЛАПОК
+admin_chat_id_str = os.getenv('ADMIN_CHAT_ID', '8184456641').strip("'\"") # Видаляємо можливі лапки з початку/кінця рядка
+ADMIN_CHAT_ID = int(admin_chat_id_str) # <--- ЗАМІНІТЬ НА ВАШ РЕАЛЬНИЙ CHAT_ID АДМІНА (ЦЕ ЦИФРИ)
 # Наприклад: ADMIN_CHAT_ID = 123456789
 
 # --- 3. ID каналу для публікацій ---
@@ -19,7 +21,9 @@ ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641')) # <--- ЗАМІН�
 # Знайдіть ID каналу (наприклад, через @get_id_bot, або переславши повідомлення з каналу боту)
 # ID каналу починається з '-100'
 # Рекомендується використовувати змінні середовища
-CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # <--- ЗАМІНІТЬ НА РЕАЛЬНИЙ ID КАНАЛУ (НАПРИКЛАД: -1001234567890)
+# ОБЕРЕЖНО: ВИДАЛЕНО int() та ЗАЛИШЕНО ПЕРЕТВОРЕННЯ на int ТІЛЬКИ ПІСЛЯ ВИДАЛЕННЯ ЛАПОК
+channel_id_str = os.getenv('CHANNEL_ID', '-1002535586055').strip("'\"") # Видаляємо можливі лапки з початку/кінця рядка
+CHANNEL_ID = int(channel_id_str) # <--- ЗАМІНІТЬ НА РЕАЛЬНИЙ ID КАНАЛУ (НАПРИКЛАД: -1001234567890)
 
 # --- 4. Налаштування логування ---
 logging.basicConfig(level=logging.INFO,
@@ -113,27 +117,43 @@ def send_my_products(message):
 # --- Функція для обробки кнопки "Наш канал" ---
 def send_channel_link(message):
     chat_id = message.chat.id
-    channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}" if str(CHANNEL_ID).startswith('-100') else "https://t.me/your_channel_link_here_manually"
-    
-    # Спробуємо отримати посилання на запрошення, якщо канал приватний
+    # Перевіряємо, чи CHANNEL_ID коректно встановлений (не 0 або пустий)
+    if CHANNEL_ID == 0: # Якщо CHANNEL_ID = 0 або не встановлений
+        bot.send_message(chat_id, "На жаль, посилання на канал не налаштовано адміністратором.")
+        logger.warning(f"Користувач {chat_id} спробував отримати посилання на канал, але CHANNEL_ID не налаштований.")
+        return
+
+    channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}" if str(CHANNEL_ID).startswith('-100') else "" # Ініціалізація
+
     try:
         if str(CHANNEL_ID).startswith('-100'): # Приватний канал
             invite_link = bot.create_chat_invite_link(CHANNEL_ID, member_limit=1).invite_link
             channel_link = invite_link
             logger.info(f"Згенеровано нове посилання на запрошення для приватного каналу: {invite_link}")
         else: # Публічний канал
-            channel_link = f"https://t.me/{CHANNEL_ID}" # Для публічного каналу можна просто посилання на username
+            # Якщо канал публічний, можна спробувати отримати chat.username або просто використовувати CHANNEL_ID
+            # Примітка: CHANNEL_ID для публічного каналу це його username (без @)
+            # Якщо CHANNEL_ID дійсно є числовим ID, а не username, то це складніше
+            # Але для публічних каналів зазвичай використовується username.
+            # Якщо CHANNEL_ID числове і канал публічний, це може бути проблемою.
+            # Припускаємо, що для публічного каналу CHANNEL_ID буде username.
+            channel_link = f"https://t.me/{CHANNEL_ID}"
             logger.info(f"Використано пряме посилання на публічний канал: {channel_link}")
     except telebot.apihelper.ApiTelegramException as e:
         logger.warning(f"Бот не може згенерувати посилання на запрошення для каналу {CHANNEL_ID} (можливо, не має прав або канал публічний і використовується інший спосіб): {e}")
-        # Якщо помилка, спробуємо використати статичне посилання на приватний канал, або посилання на публічний
         if str(CHANNEL_ID).startswith('-100'):
-             channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}" # Можливо, це статичне посилання працюватиме
+            channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}" # Можливо, це статичне посилання працюватиме
         else:
-             channel_link = f"https://t.me/your_channel_link_here_manually" # Заглушка, якщо щось пішло не так або канал публічний без username
+            channel_link = f"https://t.me/{CHANNEL_ID}" # Спробуємо просто посилання на username
     except Exception as e:
         logger.error(f"Невідома помилка при генерації посилання на запрошення: {e}", exc_info=True)
         channel_link = "https://t.me/your_channel_link_here_manually" # Заглушка, якщо щось пішло не так
+
+    if not channel_link or channel_link == "https://t.me/your_channel_link_here_manually":
+        bot.send_message(chat_id, "На жаль, посилання на канал не вдалося сформувати автоматично. Будь ласка, зверніться до адміністратора.")
+        logger.warning(f"Не вдалося сформувати посилання на канал {CHANNEL_ID}.")
+        return
+
 
     invite_text = (
         f"Запрошуємо вас приєднатися до нашого каналу, щоб не пропустити нові оголошення!\n\n"
@@ -240,13 +260,6 @@ def send_for_moderation(chat_id):
             for photo_id in photos:
                 media.append(telebot.types.InputMediaPhoto(photo_id))
             
-            # Надсилаємо альбом, а потім текст повідомлення окремо
-            # Або надсилаємо текст повідомлення з першим фото, а решту в альбом
-            # Для простоти надішлемо всі фото як альбом, а текст окремо
-            # Або, якщо Telegram API підтримує caption для медіа групи
-            # bot.send_media_group(ADMIN_CHAT_ID, media) # Не підтримує caption для усієї групи
-            
-            # Надсилаємо перше фото з підписом, інші як окремі фотографії без підпису
             if media:
                 first_photo = media[0]
                 first_photo.caption = admin_message_text
@@ -254,7 +267,6 @@ def send_for_moderation(chat_id):
                 
                 admin_msg = bot.send_photo(ADMIN_CHAT_ID, first_photo.media, caption=first_photo.caption, parse_mode='Markdown', reply_markup=markup_admin)
                 
-                # Відправляємо решту фотографій, якщо вони є
                 if len(media) > 1:
                     remaining_media = media[1:]
                     bot.send_media_group(ADMIN_CHAT_ID, remaining_media)
@@ -263,7 +275,7 @@ def send_for_moderation(chat_id):
 
         else: # Якщо фото немає
             admin_msg = bot.send_message(ADMIN_CHAT_ID, admin_message_text, parse_mode='Markdown', reply_markup=markup_admin, disable_web_page_preview=True)
-        
+            
         # Оновлюємо admin_message_id у базі даних
         conn = sqlite3.connect('products.db')
         cursor = conn.cursor()
@@ -333,9 +345,12 @@ def callback_inline(call):
                         if len(media) > 1:
                             remaining_media = media[1:]
                             bot.send_media_group(CHANNEL_ID, remaining_media)
-                else:
-                    channel_msg = bot.send_message(CHANNEL_ID, channel_text, parse_mode='Markdown', disable_web_page_preview=True)
+                    else:
+                        channel_msg = bot.send_message(CHANNEL_ID, channel_text, parse_mode='Markdown', disable_web_page_preview=True)
 
+                else: # Якщо фото немає
+                    channel_msg = bot.send_message(CHANNEL_ID, channel_text, parse_mode='Markdown', disable_web_page_preview=True)
+                    
                 if channel_msg:
                     channel_message_id = channel_msg.message_id
                     cursor.execute("UPDATE products SET status = 'approved', channel_message_id = ? WHERE id = ?", (channel_message_id, product_id))
