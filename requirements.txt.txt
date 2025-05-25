@@ -1,2 +1,0 @@
-pytelegrambotapi
-python-dotenv # Якщо плануєте використовувати .env файл для локального тестування
