@@ -1,0 +1,105 @@
+2025-05-25 17:23:24,902 - __main__ - INFO - Бот запущено. Початок polling...
+2025-05-25 17:26:44,168 - __main__ - INFO - Команда /start від 8184456641 (Король)
+2025-05-25 17:27:59,501 - __main__ - INFO - Команда /sell від 8184456641
+2025-05-25 17:28:13,885 - __main__ - INFO - Користувач 8184456641 ввів назву товару: Годинник
+2025-05-25 17:28:22,818 - __main__ - INFO - Користувач 8184456641 ввів ціну: 500 грн
+2025-05-25 17:28:40,541 - __main__ - INFO - Користувач 8184456641 ввів опис.
+2025-05-25 17:28:54,860 - __main__ - INFO - Користувач 8184456641 надіслав фото: AgACAgIAAxkBAAMLaDMpJqZmQRzwh11ToApxnl5UMSAAAhv3MRvuxJhJ_KlSIunFZ10BAAMCAAN5AAM2BA
+2025-05-25 17:28:58,118 - __main__ - INFO - Користувач 8184456641 завершив введення товару: Годинник. Відправлення адміністратору.
+2025-05-25 17:28:58,199 - __main__ - INFO - Сповіщення про новий товар відправлено адміністратору 8184456641
+2025-05-25 17:46:26,090 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-25 17:46:26,091 - __main__ - INFO - Бот запущено. Початок polling...
+2025-05-25 17:46:26,576 - __main__ - INFO - Команда /start від 8184456641 (Король)
+2025-05-25 17:46:44,698 - __main__ - INFO - Команда /sell від 8184456641
+2025-05-25 17:46:52,033 - __main__ - INFO - Користувач 8184456641 ввів назву товару: Годдинник
+2025-05-25 17:46:56,896 - __main__ - INFO - Користувач 8184456641 ввів ціну: 500 грн
+2025-05-25 17:47:03,484 - __main__ - INFO - Користувач 8184456641 ввів опис.
+2025-05-25 17:47:09,603 - __main__ - INFO - Користувач 8184456641 надіслав фото: AgACAgIAAxkBAAMLaDMpJqZmQRzwh11ToApxnl5UMSAAAhv3MRvuxJhJ_KlSIunFZ10BAAMCAAN5AAM2BA
+2025-05-25 17:47:15,314 - __main__ - INFO - Користувач 8184456641 завершив введення товару: Годдинник. ID: 1. Відправлення адміністратору.
+2025-05-25 17:47:15,550 - __main__ - INFO - Сповіщення про новий товар ID:1 відправлено адміністратору 8184456641. admin_message_id: 32
+2025-05-25 17:47:19,095 - __main__ - INFO - Оголошення ID:1 схвалено адміністратором.
+2025-05-25 17:47:19,423 - __main__ - ERROR - Не вдалося сповістити продавця 8184456641 про схвалення: name 'channel_link' is not defined
+2025-05-25 17:48:13,396 - __main__ - INFO - Команда /sell від 8184456641
+2025-05-25 17:48:23,754 - __main__ - INFO - Користувач 8184456641 ввів назву товару: Черешня
+2025-05-25 17:48:27,813 - __main__ - INFO - Користувач 8184456641 ввів ціну: 300
+2025-05-25 17:48:33,816 - __main__ - INFO - Користувач 8184456641 ввів опис.
+2025-05-25 17:48:38,348 - __main__ - INFO - Користувач 8184456641 надіслав фото: AgACAgIAAxkBAAMsaDMtxvCXjBYP2x9ZlvPdXzAo2AMAAjn3MRvuxJhJ5gSCr5g-HQMBAAMCAAN5AAM2BA
+2025-05-25 17:48:40,458 - __main__ - INFO - Користувач 8184456641 завершив введення товару: Черешня. ID: 2. Відправлення адміністратору.
+2025-05-25 17:48:40,922 - __main__ - INFO - Сповіщення про новий товар ID:2 відправлено адміністратору 8184456641. admin_message_id: 48
+2025-05-25 17:48:47,350 - __main__ - INFO - Оголошення ID:2 схвалено адміністратором.
+2025-05-25 17:48:47,737 - __main__ - ERROR - Не вдалося сповістити продавця 8184456641 про схвалення: name 'channel_link' is not defined
+2025-05-25 18:09:22,485 - __main__ - INFO - Р‘Р°Р·Р° РґР°РЅРёС… С–РЅС–С†С–Р°Р»С–Р·РѕРІР°РЅР° Р°Р±Рѕ РІР¶Рµ С–СЃРЅСѓС”.
+2025-05-25 18:09:22,486 - __main__ - INFO - Р‘РѕС‚ Р·Р°РїСѓС‰РµРЅРѕ. РџРѕС‡Р°С‚РѕРє polling...
+2025-05-25 18:21:00,802 - __main__ - INFO - РљРѕРјР°РЅРґР° /sell РІС–Рґ 8184456641
+2025-05-25 18:21:06,508 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РІРІС–РІ РЅР°Р·РІСѓ С‚РѕРІР°СЂСѓ: Р©РѕСЃСЊ
+2025-05-25 18:21:13,064 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РІРІС–РІ С†С–РЅСѓ: 500РіСЂРЅ
+2025-05-25 18:21:24,503 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РІРІС–РІ РѕРїРёСЃ.
+2025-05-25 18:21:33,759 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РЅР°РґС–СЃР»Р°РІ С„РѕС‚Рѕ: AgACAgIAAxkBAAM7aDM1fUXZd6bRMullF9XfFy_ua5wAAl73MRvuxJhJooQ44jKlir4BAAMCAAN5AAM2BA
+2025-05-25 18:21:37,108 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 Р·Р°РІРµСЂС€РёРІ РІРІРµРґРµРЅРЅСЏ С‚РѕРІР°СЂСѓ: Р©РѕСЃСЊ. ID: 3. Р’С–РґРїСЂР°РІР»РµРЅРЅСЏ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂСѓ.
+2025-05-25 18:21:37,528 - __main__ - INFO - РЎРїРѕРІС–С‰РµРЅРЅСЏ РїСЂРѕ РЅРѕРІРёР№ С‚РѕРІР°СЂ ID:3 РІС–РґРїСЂР°РІР»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂСѓ 8184456641. admin_message_id: 63
+2025-05-25 18:21:43,525 - __main__ - INFO - РћРіРѕР»РѕС€РµРЅРЅСЏ ID:3 СЃС…РІР°Р»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂРѕРј.
+2025-05-25 18:21:44,071 - __main__ - ERROR - РџРѕРјРёР»РєР° РїСѓР±Р»С–РєР°С†С–С— ID:3: no such column: channel_message_id
+Traceback (most recent call last):
+  File "C:\Users\РїРµС‚СЂРѕ\Desktop\my_seller_bot\bot.py.txt", line 429, in handle_moderation_callback
+    cursor.execute("UPDATE products SET channel_message_id = ? WHERE id = ?", (channel_message_id, product_id))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: channel_message_id
+2025-05-25 18:22:01,271 - __main__ - INFO - РћРіРѕР»РѕС€РµРЅРЅСЏ ID:3 РІС–РґС…РёР»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂРѕРј.
+2025-05-25 18:22:04,220 - __main__ - INFO - РћРіРѕР»РѕС€РµРЅРЅСЏ ID:3 РІС–РґС…РёР»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂРѕРј.
+2025-05-25 18:22:08,366 - __main__ - INFO - РћРіРѕР»РѕС€РµРЅРЅСЏ ID:3 РІС–РґС…РёР»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂРѕРј.
+2025-05-25 18:22:08,459 - __main__ - ERROR - РџРѕРјРёР»РєР° РѕР±СЂРѕР±РєРё РјРѕРґРµСЂР°С†С–С— РґР»СЏ ID:3: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\РїРµС‚СЂРѕ\Desktop\my_seller_bot\bot.py.txt", line 477, in handle_moderation_callback
+    bot.edit_message_text(f"РћРіРѕР»РѕС€РµРЅРЅСЏ ID:`{product_id}`: **Р’Р†Р”РҐРР›Р•РќРћ**\n"
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          f"Р‘СѓР»Рѕ: **{product_name}**",
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          admin_chat_id, message_id, parse_mode='Markdown', reply_markup=None)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\__init__.py", line 4997, in edit_message_text
+    result = apihelper.edit_message_text(
+        self.token, text, chat_id=chat_id, message_id=message_id, inline_message_id=inline_message_id,
+        parse_mode=parse_mode, entities=entities, reply_markup=reply_markup, link_preview_options=link_preview_options,
+        business_connection_id=business_connection_id, timeout=timeout)
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\apihelper.py", line 1524, in edit_message_text
+    return _make_request(token, method_url, params=payload, method='post')
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-05-25 18:22:08,692 - __main__ - ERROR - РџРѕРјРёР»РєР° РѕР±СЂРѕР±РєРё РјРѕРґРµСЂР°С†С–С— РґР»СЏ ID:3: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\РїРµС‚СЂРѕ\Desktop\my_seller_bot\bot.py.txt", line 477, in handle_moderation_callback
+    bot.edit_message_text(f"РћРіРѕР»РѕС€РµРЅРЅСЏ ID:`{product_id}`: **Р’Р†Р”РҐРР›Р•РќРћ**\n"
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          f"Р‘СѓР»Рѕ: **{product_name}**",
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          admin_chat_id, message_id, parse_mode='Markdown', reply_markup=None)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\__init__.py", line 4997, in edit_message_text
+    result = apihelper.edit_message_text(
+        self.token, text, chat_id=chat_id, message_id=message_id, inline_message_id=inline_message_id,
+        parse_mode=parse_mode, entities=entities, reply_markup=reply_markup, link_preview_options=link_preview_options,
+        business_connection_id=business_connection_id, timeout=timeout)
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\apihelper.py", line 1524, in edit_message_text
+    return _make_request(token, method_url, params=payload, method='post')
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+  File "C:\Users\РїРµС‚СЂРѕ\AppData\Local\Programs\Python\Python313\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-05-25 18:22:23,670 - __main__ - INFO - РљРѕРјР°РЅРґР° /sell РІС–Рґ 8184456641
+2025-05-25 18:22:31,933 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РІРІС–РІ РЅР°Р·РІСѓ С‚РѕРІР°СЂСѓ: Р РµС‡С–
+2025-05-25 18:22:38,026 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РІРІС–РІ С†С–РЅСѓ: 700
+2025-05-25 18:22:44,350 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РІРІС–РІ РѕРїРёСЃ.
+2025-05-25 18:23:15,632 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 РЅР°РґС–СЃР»Р°РІ С„РѕС‚Рѕ: AgACAgIAAxkBAANSaDM143YhQ01-EW5x3RO5FWCIfXsAAmD3MRvuxJhJfT0hDWxE6PUBAAMCAAN5AAM2BA
+2025-05-25 18:23:19,044 - __main__ - INFO - РљРѕСЂРёСЃС‚СѓРІР°С‡ 8184456641 Р·Р°РІРµСЂС€РёРІ РІРІРµРґРµРЅРЅСЏ С‚РѕРІР°СЂСѓ: Р РµС‡С–. ID: 4. Р’С–РґРїСЂР°РІР»РµРЅРЅСЏ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂСѓ.
+2025-05-25 18:23:19,511 - __main__ - INFO - РЎРїРѕРІС–С‰РµРЅРЅСЏ РїСЂРѕ РЅРѕРІРёР№ С‚РѕРІР°СЂ ID:4 РІС–РґРїСЂР°РІР»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂСѓ 8184456641. admin_message_id: 86
+2025-05-25 18:23:22,945 - __main__ - INFO - РћРіРѕР»РѕС€РµРЅРЅСЏ ID:4 СЃС…РІР°Р»РµРЅРѕ Р°РґРјС–РЅС–СЃС‚СЂР°С‚РѕСЂРѕРј.
+2025-05-25 18:23:23,176 - __main__ - ERROR - РџРѕРјРёР»РєР° РїСѓР±Р»С–РєР°С†С–С— ID:4: no such column: channel_message_id
+Traceback (most recent call last):
+  File "C:\Users\РїРµС‚СЂРѕ\Desktop\my_seller_bot\bot.py.txt", line 429, in handle_moderation_callback
+    cursor.execute("UPDATE products SET channel_message_id = ? WHERE id = ?", (channel_message_id, product_id))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: channel_message_id
