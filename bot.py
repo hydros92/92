@@ -1,31 +1,25 @@
 import sqlite3
 import telebot
 import logging
-import os # Для змінних середовища на сервері
+import os
+from datetime import datetime, timedelta
+import re # Для обробки тексту та хештегів
 
 # --- 1. Ваш токен бота ---
-# Рекомендується використовувати змінні середовища для безпеки
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # <--- ВСТАВТЕ СЮДИ ВАШ РЕАЛЬНИЙ ТОКЕН АБО ВИКОРИСТОВУЙТЕ ЗМІННУ СЕРЕДОВИЩА
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU')
 
 # --- 2. ID адміністратора ---
-# Знайдіть свій chat_id через @userinfobot у Telegram і вставте його сюди.
-# Це потрібно для сповіщень адміністратору про нові товари.
-# Рекомендується використовувати змінні середовища
-# ОБЕРЕЖНО: ВИДАЛЕНО int() та ЗАЛИШЕНО ПЕРЕТВОРЕННЯ на int ТІЛЬКИ ПІСЛЯ ВИДАЛЕННЯ ЛАПОК
-admin_chat_id_str = os.getenv('ADMIN_CHAT_ID', '8184456641').strip("'\"") # Видаляємо можливі лапки з початку/кінця рядка
-ADMIN_CHAT_ID = int(admin_chat_id_str) # <--- ЗАМІНІТЬ НА ВАШ РЕАЛЬНИЙ CHAT_ID АДМІНА (ЦЕ ЦИФРИ)
-# Наприклад: ADMIN_CHAT_ID = 123456789
+admin_chat_id_str = os.getenv('ADMIN_CHAT_ID', '8184456641').strip("'\"")
+ADMIN_CHAT_ID = int(admin_chat_id_str)
 
 # --- 3. ID каналу для публікацій ---
-# Якщо ви хочете автоматично публікувати товари в канал.
-# Знайдіть ID каналу (наприклад, через @get_id_bot, або переславши повідомлення з каналу боту)
-# ID каналу починається з '-100'
-# Рекомендується використовувати змінні середовища
-# ОБЕРЕЖНО: ВИДАЛЕНО int() та ЗАЛИШЕНО ПЕРЕТВОРЕННЯ на int ТІЛЬКИ ПІСЛЯ ВИДАЛЕННЯ ЛАПОК
-channel_id_str = os.getenv('CHANNEL_ID', '-1002535586055').strip("'\"") # Видаляємо можливі лапки з початку/кінця рядка
-CHANNEL_ID = int(channel_id_str) # <--- ЗАМІНІТЬ НА РЕАЛЬНИЙ ID КАНАЛУ (НАПРИКЛАД: -1001234567890)
+channel_id_str = os.getenv('CHANNEL_ID', '-1002535586055').strip("'\"")
+CHANNEL_ID = int(channel_id_str)
 
-# --- 4. Налаштування логування ---
+# --- 4. Номер картки Monobank для оплати комісії ---
+MONOBANK_CARD_NUMBER = '4441 1111 5302 1484'
+
+# --- 5. Налаштування логування ---
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     handlers=[
@@ -34,10 +28,10 @@ logging.basicConfig(level=logging.INFO,
                     ])
 logger = logging.getLogger(__name__)
 
-# --- 5. Ініціалізація бота ---
+# --- 6. Ініціалізація бота ---
 bot = telebot.TeleBot(TOKEN)
 
-# --- 6. Словник для зберігання даних користувачів під час процесу завантаження товару ---
+# --- 7. Словник для зберігання даних користувачів під час процесу завантаження товару ---
 # user_data[chat_id] = {'step': 'waiting_name', 'name': None, 'price': None, 'description': None, 'photos': []}
 user_data = {}
 
@@ -54,7 +48,7 @@ def init_db():
             description TEXT NOT NULL,
             photos TEXT, -- Зберігатимемо список photo_file_id через кому
             status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected', 'sold'
-            admin_message_id INTEGER, -- ID повідомлення адміністратору для подальшої зміни (якщо потрібно)
+            admin_message_id INTEGER, -- ID повідомлення адміністратору для подальшої зміни
             channel_message_id INTEGER -- ID повідомлення в каналі після публікації
         )
     ''')
@@ -62,19 +56,36 @@ def init_db():
     conn.close()
     logger.info("База даних ініціалізована або вже існує.")
 
-# --- 7. Обробник команди /start ---
+# --- Функція для генерації хештегів ---
+def generate_hashtags(description, num_hashtags=5):
+    # Прибираємо пунктуацію та розбиваємо на слова
+    words = re.findall(r'\b\w+\b', description.lower())
+    
+    # Фільтруємо короткі та поширені слова, щоб отримати більш значущі
+    stopwords = set(['я', 'ми', 'ти', 'ви', 'він', 'вона', 'воно', 'вони', 'це', 'що', 'як', 'де', 'коли', 'а', 'і', 'та', 'або', 'чи', 'для', 'з', 'на', 'у', 'в', 'до', 'від', 'по', 'за', 'при', 'про', 'між', 'під', 'над', 'без', 'через', 'для'])
+    filtered_words = [word for word in words if len(word) > 2 and word not in stopwords]
+    
+    # Вибираємо унікальні слова
+    unique_words = list(set(filtered_words))
+    
+    # Беремо перші `num_hashtags` унікальних слів або менше, якщо їх недостатньо
+    hashtags = ['#' + word for word in unique_words[:num_hashtags]]
+    
+    return " ".join(hashtags) if hashtags else ""
+
+# --- Обробник команди /start ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     logger.info(f"Користувач {message.chat.id} розпочав взаємодію з ботом.")
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     item_add = telebot.types.KeyboardButton("Додати товар")
-    item_my = telebot.types.KeyboardButton("Мої товари") # Додамо кнопку для перегляду своїх товарів
+    item_my = telebot.types.KeyboardButton("Мої товари")
     item_help = telebot.types.KeyboardButton("Допомога")
-    item_channel = telebot.types.KeyboardButton("Наш канал") # Додамо кнопку для переходу на канал
+    item_channel = telebot.types.KeyboardButton("Наш канал")
     markup.add(item_add, item_my, item_help, item_channel)
     bot.send_message(message.chat.id, "Привіт! Я бот для розміщення оголошень. Оберіть дію:", reply_markup=markup)
 
-# --- 8. Обробник текстових повідомлень (для кнопок) ---
+# --- Обробник текстових повідомлень (для кнопок) ---
 @bot.message_handler(content_types=['text'])
 def handle_text(message):
     chat_id = message.chat.id
@@ -117,43 +128,38 @@ def send_my_products(message):
 # --- Функція для обробки кнопки "Наш канал" ---
 def send_channel_link(message):
     chat_id = message.chat.id
-    # Перевіряємо, чи CHANNEL_ID коректно встановлений (не 0 або пустий)
-    if CHANNEL_ID == 0: # Якщо CHANNEL_ID = 0 або не встановлений
+    if CHANNEL_ID == 0:
         bot.send_message(chat_id, "На жаль, посилання на канал не налаштовано адміністратором.")
         logger.warning(f"Користувач {chat_id} спробував отримати посилання на канал, але CHANNEL_ID не налаштований.")
         return
 
-    channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}" if str(CHANNEL_ID).startswith('-100') else "" # Ініціалізація
-
+    channel_link = ""
     try:
-        if str(CHANNEL_ID).startswith('-100'): # Приватний канал
+        if str(CHANNEL_ID).startswith('-100'):
+            # Для приватного каналу завжди генеруємо нове посилання
             invite_link = bot.create_chat_invite_link(CHANNEL_ID, member_limit=1).invite_link
             channel_link = invite_link
             logger.info(f"Згенеровано нове посилання на запрошення для приватного каналу: {invite_link}")
-        else: # Публічний канал
-            # Якщо канал публічний, можна спробувати отримати chat.username або просто використовувати CHANNEL_ID
-            # Примітка: CHANNEL_ID для публічного каналу це його username (без @)
-            # Якщо CHANNEL_ID дійсно є числовим ID, а не username, то це складніше
-            # Але для публічних каналів зазвичай використовується username.
-            # Якщо CHANNEL_ID числове і канал публічний, це може бути проблемою.
-            # Припускаємо, що для публічного каналу CHANNEL_ID буде username.
+        else:
+            # Для публічного каналу можна використовувати username або пряме посилання за ID, якщо відомо
+            # Тут ми припускаємо, що для публічного каналу CHANNEL_ID це його username без @
             channel_link = f"https://t.me/{CHANNEL_ID}"
             logger.info(f"Використано пряме посилання на публічний канал: {channel_link}")
     except telebot.apihelper.ApiTelegramException as e:
         logger.warning(f"Бот не може згенерувати посилання на запрошення для каналу {CHANNEL_ID} (можливо, не має прав або канал публічний і використовується інший спосіб): {e}")
+        # Спробуємо альтернативні статичні посилання, якщо генерація не вдалася
         if str(CHANNEL_ID).startswith('-100'):
-            channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}" # Можливо, це статичне посилання працюватиме
+            channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}"
         else:
             channel_link = f"https://t.me/{CHANNEL_ID}" # Спробуємо просто посилання на username
     except Exception as e:
         logger.error(f"Невідома помилка при генерації посилання на запрошення: {e}", exc_info=True)
         channel_link = "https://t.me/your_channel_link_here_manually" # Заглушка, якщо щось пішло не так
 
-    if not channel_link or channel_link == "https://t.me/your_channel_link_here_manually":
+    if not channel_link or "your_channel_link_here_manually" in channel_link:
         bot.send_message(chat_id, "На жаль, посилання на канал не вдалося сформувати автоматично. Будь ласка, зверніться до адміністратора.")
         logger.warning(f"Не вдалося сформувати посилання на канал {CHANNEL_ID}.")
         return
-
 
     invite_text = (
         f"Запрошуємо вас приєднатися до нашого каналу, щоб не пропустити нові оголошення!\n\n"
@@ -164,15 +170,23 @@ def send_channel_link(message):
     logger.info(f"Користувач {chat_id} запросив посилання на канал.")
 
 
-# --- 9. Початок процесу додавання товару ---
+# --- Початок процесу додавання товару ---
 def start_add_product(message):
     chat_id = message.chat.id
     user_data[chat_id] = {'step': 'waiting_name', 'photos': []}
     bot.send_message(chat_id, "Введіть назву вашого товару:")
 
-# --- 10. Обробка введених даних про товар ---
+# --- Обробка введених даних про товар ---
+@bot.message_handler(content_types=['text']) # Цей обробник потрібен для текстових відповідей
 def process_product_input(message):
     chat_id = message.chat.id
+    
+    if chat_id not in user_data:
+        # Це текстове повідомлення, яке не є частиною процесу додавання товару
+        # Обробляється загальним handle_text, який вже є.
+        # Цей обробник спрацює лише, якщо chat_id є в user_data.
+        return 
+
     current_step = user_data[chat_id]['step']
 
     if current_step == 'waiting_name':
@@ -181,43 +195,43 @@ def process_product_input(message):
         bot.send_message(chat_id, "Тепер введіть ціну товару (наприклад, '100 грн' або 'Договірна'):")
     elif current_step == 'waiting_price':
         user_data[chat_id]['price'] = message.text
-        user_data[chat_id]['step'] = 'waiting_description'
-        bot.send_message(chat_id, "Тепер, будь ласка, надайте короткий опис товару (до 500 символів):")
-    elif current_step == 'waiting_description':
-        user_data[chat_id]['description'] = message.text
         user_data[chat_id]['step'] = 'waiting_photos'
         markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         markup.add(telebot.types.KeyboardButton("Пропустити"))
-        bot.send_message(chat_id, "Надішліть фотографії товару (до 10 фото, кожне окремим повідомленням). Коли закінчите, натисніть 'Пропустити' або просто надішліть будь-яке текстове повідомлення (крім фото).", reply_markup=markup)
+        bot.send_message(chat_id, "Надішліть фотографії товару (до 10 фото, кожне окремим повідомленням). Коли закінчите, натисніть 'Пропустити'.", reply_markup=markup)
+    elif current_step == 'waiting_description': # Це новий крок після фото
+        user_data[chat_id]['description'] = message.text
+        # Генерація хештегів на основі опису
+        hashtags = generate_hashtags(message.text)
+        user_data[chat_id]['hashtags'] = hashtags
+        send_for_moderation(chat_id)
+    elif current_step == 'waiting_photos':
+        if message.text == "Пропустити":
+            user_data[chat_id]['step'] = 'waiting_description' # Переходимо до опису
+            bot.send_message(chat_id, "Добре, тепер, будь ласка, надайте короткий опис товару (до 500 символів):")
+        else: # Якщо користувач надіслав текст замість фото або "Пропустити"
+            bot.send_message(chat_id, "Будь ласка, надішліть фотографії або натисніть 'Пропустити'.")
     else:
-        # Якщо користувач ввів текст, а ми очікуємо фото або "Пропустити"
-        if user_data[chat_id]['step'] == 'waiting_photos':
-            if message.text == "Пропустити":
-                send_for_moderation(chat_id)
-            else: # Користувач надіслав текст замість фото або "Пропустити"
-                bot.send_message(chat_id, "Будь ласка, надішліть фотографії або натисніть 'Пропустити'.")
-        else:
-            bot.send_message(chat_id, "Невідома команда. Будь ласка, скористайтеся кнопками або командою /start.")
+        bot.send_message(chat_id, "Невідома команда. Будь ласка, скористайтеся кнопками або командою /start.")
 
-
-# --- 11. Обробка фотографій ---
+# --- Обробка фотографій ---
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
     chat_id = message.chat.id
     if chat_id in user_data and user_data[chat_id]['step'] == 'waiting_photos':
-        # Зберігаємо file_id найбільшої версії фото
-        photo_file_id = message.photo[-1].file_id
+        photo_file_id = message.photo[-1].file_id # Зберігаємо file_id найбільшої версії фото
         if len(user_data[chat_id]['photos']) < 10: # Обмеження до 10 фото
             user_data[chat_id]['photos'].append(photo_file_id)
             bot.send_message(chat_id, f"Фото {len(user_data[chat_id]['photos'])} додано. Надішліть ще або натисніть 'Пропустити'.")
         else:
-            bot.send_message(chat_id, "Ви досягли максимальної кількості фото (10).")
-    elif chat_id in user_data: # Якщо фото надіслано не на кроці 'waiting_photos'
-        bot.send_message(chat_id, "Будь ласка, дотримуйтесь послідовності. Ви вже пройшли етап завантаження фото.")
+            bot.send_message(chat_id, "Ви досягли максимальної кількості фото (10). Будь ласка, натисніть 'Пропустити'.")
+    elif chat_id in user_data and user_data[chat_id]['step'] != 'waiting_photos':
+        bot.send_message(chat_id, "Будь ласка, дотримуйтесь послідовності. Зараз не час для завантаження фото.")
     else:
         bot.send_message(chat_id, "Для початку додавання товару натисніть 'Додати товар' або скористайтеся командою /start.")
 
-# --- 12. Відправка товару на модерацію адміністратору ---
+
+# --- Відправка товару на модерацію адміністратору ---
 def send_for_moderation(chat_id):
     data = user_data[chat_id]
     name = data['name']
@@ -225,6 +239,7 @@ def send_for_moderation(chat_id):
     description = data['description']
     photos = data['photos']
     seller_chat_id = chat_id
+    hashtags = data.get('hashtags', '')
 
     # Зберігаємо товар в базу даних зі статусом 'pending'
     conn = sqlite3.connect('products.db')
@@ -241,8 +256,9 @@ def send_for_moderation(chat_id):
         f"📩 *Новий товар на модерацію!* (ID: {product_id})\n\n"
         f"📦 *Назва:* {name}\n"
         f"💰 *Ціна:* {price}\n"
-        f"📝 *Опис:* {description}\n\n"
-        f"👤 *Продавець:* [Користувач {seller_chat_id}](tg://user?id={seller_chat_id})\n" # Додаємо посилання на користувача
+        f"📝 *Опис:* {description}\n"
+        f"🏷️ *Хештеги:* {hashtags}\n\n"
+        f"👤 *Продавець:* [Користувач {seller_chat_id}](tg://user?id={seller_chat_id})\n"
         f"📸 *Фото:* {'Є' if photos else 'Немає'}\n\n"
         f"Оберіть дію:"
     )
@@ -261,6 +277,7 @@ def send_for_moderation(chat_id):
                 media.append(telebot.types.InputMediaPhoto(photo_id))
             
             if media:
+                # Перше фото з підписом, інші без
                 first_photo = media[0]
                 first_photo.caption = admin_message_text
                 first_photo.parse_mode = 'Markdown'
@@ -270,9 +287,8 @@ def send_for_moderation(chat_id):
                 if len(media) > 1:
                     remaining_media = media[1:]
                     bot.send_media_group(ADMIN_CHAT_ID, remaining_media)
-            else:
+            else: # Це fallback, якщо photos був не порожній, але media порожній (теоретично не має статися)
                 admin_msg = bot.send_message(ADMIN_CHAT_ID, admin_message_text, parse_mode='Markdown', reply_markup=markup_admin, disable_web_page_preview=True)
-
         else: # Якщо фото немає
             admin_msg = bot.send_message(ADMIN_CHAT_ID, admin_message_text, parse_mode='Markdown', reply_markup=markup_admin, disable_web_page_preview=True)
             
@@ -283,19 +299,19 @@ def send_for_moderation(chat_id):
         conn.commit()
         conn.close()
 
-        bot.send_message(chat_id, "Ваш товар відправлено на модерацію. Адміністратор розгляне його найближчим часом.")
+        bot.send_message(chat_id, "Ваш товар відправлено на модерацію. Адміністратор розгляне його найближчим часом.", 
+                         reply_markup=telebot.types.ReplyKeyboardRemove()) # Прибираємо кнопку "Пропустити"
         logger.info(f"Товар ID:{product_id} відправлено адміністратору {ADMIN_CHAT_ID} для модерації.")
 
     except Exception as e:
         logger.error(f"Не вдалося відправити сповіщення адміністратору {ADMIN_CHAT_ID} про товар ID:{product_id}: {e}", exc_info=True)
-        bot.send_message(chat_id, "Виникла помилка при відправці адміністратору. Будь ласка, спробуйте пізніше або зв'яжіться з підтримкою.")
+        bot.send_message(chat_id, "Виникла помилка при відправці адміністратору. Будь ласка, спробуйте пізніше або зв'яжіться з підтримкою.",
+                         reply_markup=telebot.types.ReplyKeyboardRemove())
     finally:
-        # Очищаємо стан користувача після завершення процесу
         if chat_id in user_data:
             del user_data[chat_id]
 
-
-# --- 13. Обробка натискань на кнопки InlineKeyboardMarkup для адміністратора ---
+# --- Обробка натискань на кнопки InlineKeyboardMarkup для адміністратора ---
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
     if call.message:
@@ -320,11 +336,13 @@ def callback_inline(call):
             # Опублікувати товар в канал
             try:
                 # Формуємо текст для публікації в каналі
+                hashtags = generate_hashtags(description) # Знову генеруємо хештеги для каналу
                 channel_text = (
                     f"✨ *Нове оголошення!* ✨\n\n"
                     f"📦 *Назва:* {name}\n"
                     f"💰 *Ціна:* {price}\n"
-                    f"📝 *Опис:* {description}\n\n"
+                    f"📝 *Опис:* {description}\n"
+                    f"🏷️ {hashtags}\n\n"
                     f"🔗 *Зв'язок з продавцем:* [Написати продавцю](tg://user?id={seller_chat_id})"
                 )
 
@@ -334,7 +352,6 @@ def callback_inline(call):
                     for photo_id in photos:
                         media.append(telebot.types.InputMediaPhoto(photo_id))
                     
-                    # Надсилаємо перше фото з підписом, інші як окремі фотографії без підпису
                     if media:
                         first_photo = media[0]
                         first_photo.caption = channel_text
@@ -347,7 +364,6 @@ def callback_inline(call):
                             bot.send_media_group(CHANNEL_ID, remaining_media)
                     else:
                         channel_msg = bot.send_message(CHANNEL_ID, channel_text, parse_mode='Markdown', disable_web_page_preview=True)
-
                 else: # Якщо фото немає
                     channel_msg = bot.send_message(CHANNEL_ID, channel_text, parse_mode='Markdown', disable_web_page_preview=True)
                     
@@ -355,11 +371,16 @@ def callback_inline(call):
                     channel_message_id = channel_msg.message_id
                     cursor.execute("UPDATE products SET status = 'approved', channel_message_id = ? WHERE id = ?", (channel_message_id, product_id))
                     conn.commit()
+                    
                     bot.answer_callback_query(call.id, "Товар опубліковано!")
                     bot.edit_message_text(chat_id=call.message.chat.id,
-                                          message_id=call.message.message_id,
-                                          text=f"✅ Товар ID:{product_id} опубліковано в канал.\n\n" + call.message.text.split('\n\n')[1], # Зберігаємо частину оригінального тексту
-                                          parse_mode='Markdown')
+                                            message_id=call.message.message_id,
+                                            text=f"✅ Товар ID:{product_id} опубліковано в канал.\n\n" + call.message.text.split('\n\n')[1], # Зберігаємо частину оригінального тексту
+                                            parse_mode='Markdown',
+                                            reply_markup=telebot.types.InlineKeyboardMarkup().add(
+                                                telebot.types.InlineKeyboardButton("✅ Опубліковано", callback_data=f"approved_{product_id}"),
+                                                telebot.types.InlineKeyboardButton("💰 Продано", callback_data=f"sold_{product_id}") # Додана кнопка "Продано"
+                                            ))
                     bot.send_message(seller_chat_id, f"🎉 Ваш товар '{name}' був опублікований в каналі!")
                     logger.info(f"Товар ID:{product_id} опубліковано в канал {CHANNEL_ID}.")
                 else:
@@ -377,11 +398,58 @@ def callback_inline(call):
             conn.commit()
             bot.answer_callback_query(call.id, "Товар відхилено.")
             bot.edit_message_text(chat_id=call.message.chat.id,
-                                  message_id=call.message.message_id,
-                                  text=f"❌ Товар ID:{product_id} відхилено.\n\n" + call.message.text.split('\n\n')[1], # Зберігаємо частину оригінального тексту
-                                  parse_mode='Markdown')
+                                    message_id=call.message.message_id,
+                                    text=f"❌ Товар ID:{product_id} відхилено.\n\n" + call.message.text.split('\n\n')[1],
+                                    parse_mode='Markdown',
+                                    reply_markup=None) # Прибираємо кнопки після відхилення
             bot.send_message(seller_chat_id, f"😔 На жаль, ваш товар '{name}' був відхилений адміністратором. Зв'яжіться з адміністратором для деталей.")
             logger.info(f"Товар ID:{product_id} відхилено адміністратором.")
+
+        elif action == "sold" and current_status == 'approved':
+            # Оновлюємо статус товару на 'sold'
+            cursor.execute("UPDATE products SET status = 'sold' WHERE id = ?", (product_id,))
+            conn.commit()
+
+            # Обчислюємо комісію (припускаємо, що ціна у форматі "100 грн")
+            commission_amount = 0
+            try:
+                # Вилучаємо число з ціни, ігноруючи текст
+                price_value_match = re.search(r'(\d+\.?\d*)', price)
+                if price_value_match:
+                    item_price = float(price_value_match.group(1))
+                    commission_amount = item_price * 0.10 # 10% комісія
+                    commission_message = f"Сума комісії: *{commission_amount:.2f} грн*."
+                else:
+                    commission_message = "Не вдалося розрахувати комісію (ціна не містить числа)."
+            except ValueError:
+                commission_message = "Не вдалося розрахувати комісію (ціна не є числом)."
+
+            bot.answer_callback_query(call.id, "Статус товару оновлено на 'Продано'.")
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                    message_id=call.message.message_id,
+                                    text=f"✅ Товар ID:{product_id} продано.\n\n" + call.message.text.split('\n\n')[1],
+                                    parse_mode='Markdown',
+                                    reply_markup=None) # Прибираємо кнопки після продажу
+            
+            # Повідомлення продавцю про продаж та комісію
+            bot.send_message(seller_chat_id, 
+                             f"🎉 Ваш товар '{name}' було продано! {commission_message}\n"
+                             f"Будь ласка, сплатіть комісію на картку Monobank: `{MONOBANK_CARD_NUMBER}`\n"
+                             f"Дякуємо за співпрацю!", parse_mode='Markdown')
+            logger.info(f"Товар ID:{product_id} продано. Продавцю {seller_chat_id} надіслано повідомлення про комісію.")
+
+            # Оновлення повідомлення в каналі, якщо воно було опубліковано
+            if CHANNEL_ID and product_info[7]: # product_info[7] - channel_message_id
+                try:
+                    bot.edit_message_text(chat_id=CHANNEL_ID,
+                                          message_id=product_info[7],
+                                          text=f"❌ *Оголошення неактивне* ❌\n\n{call.message.text}", # Можна змінити на більш підходящий текст
+                                          parse_mode='Markdown',
+                                          reply_markup=None) # Видалити кнопки, якщо є
+                except Exception as e:
+                    logger.error(f"Не вдалося оновити повідомлення в каналі для товару ID:{product_id}: {e}", exc_info=True)
+
+
         else:
             bot.answer_callback_query(call.id, "Цей товар вже було оброблено або дія недійсна.")
             logger.info(f"Спроба повторної дії над товаром ID:{product_id} (поточний статус: {current_status}, дія: {action}).")
