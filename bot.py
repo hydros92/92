@@ -40,62 +40,57 @@ user_data = {}
 
 # --- Функція для ініціалізації бази даних SQLite ---
 def init_db():
-    conn = sqlite3.connect('products.db')
+    conn = sqlite3.connect('bot.db')
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            seller_chat_id INTEGER NOT NULL,
-            seller_username TEXT, -- Додано для зручності
-            product_name TEXT NOT NULL,
-            price TEXT NOT NULL,
-            description TEXT NOT NULL,
-            photos TEXT, -- Зберігатимемо список photo_file_id через кому
-            status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected', 'sold'
-            admin_message_id INTEGER, -- ID повідомлення адміністратору для подальшої зміни
-            channel_message_id INTEGER, -- ID повідомлення в каналі після публікації
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
 
-    # Додаємо стовпець seller_chat_id, якщо його не існує (для існуючих баз даних)
-    try:
-        cursor.execute("SELECT seller_chat_id FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE products ADD COLUMN seller_chat_id INTEGER")
-        logging.info("Додано стовпець 'seller_chat_id' до таблиці 'products'.")
-
-    # Додаємо стовпець channel_message_id, якщо його не існує (для існуючих баз даних)
-    try:
-        cursor.execute("SELECT channel_message_id FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE products ADD COLUMN channel_message_id INTEGER")
-        logging.info("Додано стовпець 'channel_message_id' до таблиці 'products'.")
-
-    # Створюємо таблицю для користувачів
+    # Створення таблиці users
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            chat_id INTEGER PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat_id INTEGER UNIQUE,
             username TEXT,
             first_name TEXT,
             last_name TEXT,
-            is_blocked INTEGER DEFAULT 0, -- 0 - не заблокований, 1 - заблокований
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            language_code TEXT,
+            is_admin INTEGER DEFAULT 0,
+            is_blocked INTEGER DEFAULT 0,
+            blocked_by TEXT DEFAULT NULL,
+            blocked_at TEXT DEFAULT NULL,
+            joined_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
-    # Створюємо таблицю для статистики дій
+    # Створення таблиці products
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS statistics (
+        CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL, -- наприклад, 'start', 'product_submitted', 'product_approved', 'product_sold'
-            user_id INTEGER NOT NULL,
-            product_id INTEGER, -- може бути NULL, якщо дія не стосується товару
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            user_id INTEGER,
+            title TEXT,
+            description TEXT,
+            price TEXT,
+            photo_file_id TEXT,
+            status TEXT DEFAULT 'pending', -- pending, approved, rejected, sold
+            moderator_id INTEGER,
+            moderated_at TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
+    # Перевірка та додавання стовпця user_id, якщо його немає
+    # Це важлива частина, яку ми вже обговорювали
+    try:
+        cursor.execute("SELECT user_id FROM products LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE products ADD COLUMN user_id INTEGER")
+        print("Додано стовпець 'user_id' до таблиці 'products'.")
+
+    # Додайте сюди інші таблиці, якщо вони у вас є (наприклад, payments)
+    # cursor.execute('''
+    #     CREATE TABLE IF NOT EXISTS payments (
+    #         ...
+    #     )
+    # ''')
+
     conn.commit()
     conn.close()
     logger.info("База даних ініціалізована або вже існує.")
