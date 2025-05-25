@@ -446,3 +446,6 @@ def process_photo(message):
 
     # Відправляємо адміністратору повідомлення про новий товар
     send_product_to_admin(product_id)
+if __name__ == '__main__':
+    logger.info("Бот запущено!")
+    bot.infinity_polling() # Або bot.polling(non_stop=True)
