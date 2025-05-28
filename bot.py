@@ -7,24 +7,25 @@ from datetime import datetime, timedelta
 import re
 import json # Для зберігання фото як JSON рядка
 import requests # Для HTTP запитів до AI API
-from dotenv import load_dotenv
+
+python-dotenv
+psycopg2-binary
+
+
 import os
+from sqlalchemy import create_engine
 
-load_dotenv()  # Завантажує змінні з .env
+DATABASE_URL = os.getenv("NEON_DB_URL")  # замість DATABASE_URL
 
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')
-CHANNEL_ID = os.getenv('CHANNEL_ID')
-MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER')
-GROK_API_KEY = os.getenv('GROK_API_KEY')
-GROK_API_URL = os.getenv('GROK_API_URL')
+engine = create_engine(DATABASE_URL, echo=True)
 
-print("Token:", TOKEN)
-print("Admin Chat ID:", ADMIN_CHAT_ID)
-print("Channel ID:", CHANNEL_ID)
-print("Monobank Card Number:", MONOBANK_CARD_NUMBER)
-print("Grok API Key:", GROK_API_KEY)
-print("Grok API URL:", GROK_API_URL)
+
+set TELEGRAM_BOT_TOKEN="8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU"
+set ADMIN_CHAT_ID="8184456641"
+set CHANNEL_ID="-1002535586055" 
+set MONOBANK_CARD_NUMBER="4441111153021484"
+set GROK_API_KEY="xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk"
+set GROK_API_URL="xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk"
 
 
 
