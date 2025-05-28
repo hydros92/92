@@ -33,17 +33,17 @@ if not HEROKU_APP_NAME:
 else:
     WEBHOOK_URL_BASE = f"https://NaProDash.herokuapp.com"
 
-WEBHOOK_URL_PATH = f"/{TOKEN}/" # Шлях, на який Telegram надсилатиме оновлення
+WEBHOOK_URL_PATH = f"/{https://NaProDash.herokuapp.com}/" # Шлях, на який Telegram надсилатиме оновлення
 
 # --- 2. Налаштування логування ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler()
+        logging.FileHandler("bot.log", encoding...)
     ]
 )
+
 logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(TOKEN)
