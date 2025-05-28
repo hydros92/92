@@ -41,13 +41,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler("bot.log", encoding='utf-8')
+        # Можливо, також StreamHandler для виводу в консоль Heroku,
+        # якщо його немає: logging.StreamHandler()
     ]
 )
 
+# ДОДАЙТЕ ЦЕЙ РЯДОК:
 logger = logging.getLogger(__name__)
-
-bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__) # Ініціалізуємо Flask додаток
 
 # --- 3. Змінні станів для багатошагових процесів ---
 # Використовується для зберігання тимчасових даних під час додавання товару.
