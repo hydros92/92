@@ -321,3 +321,202 @@ Traceback (most recent call last):
     raise ApiTelegramException(method_name, result, result_json)
 telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 409. Description: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
 
+2025-05-28 22:19:16,315 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 22:19:17,155 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 22:19:17,155 - __main__ - INFO - Бот запускається...
+2025-05-28 22:19:56,695 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:19:56,696 - __main__ - INFO - Користувач 8184456641 запустив бота.
+2025-05-28 22:20:02,265 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:20:09,376 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:20:16,179 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:20:27,801 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:20:30,607 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:20:40,382 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:20:54,402 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:21:00,098 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:21:02,233 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:21:12,944 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:51:50,412 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 22:51:50,529 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 22:51:50,529 - __main__ - INFO - Бот запускається...
+2025-05-28 22:52:06,154 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:52:06,544 - __main__ - ERROR - Помилка HTTP запиту до Grok API: 403 Client Error: Forbidden for url: https://api.x.ai/v1/chat/completions
+2025-05-28 22:52:19,758 - __main__ - ERROR - Помилка HTTP запиту до Grok API: 403 Client Error: Forbidden for url: https://api.x.ai/v1/chat/completions
+2025-05-28 22:52:30,958 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:52:35,432 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:52:39,577 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:52:46,028 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:52:54,031 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:52:58,995 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:53:04,972 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:53:10,905 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:53:52,677 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:54:11,092 - __main__ - ERROR - Помилка HTTP запиту до Grok API: 403 Client Error: Forbidden for url: https://api.x.ai/v1/chat/completions
+2025-05-28 22:54:33,537 - __main__ - ERROR - Помилка HTTP запиту до Grok API: 403 Client Error: Forbidden for url: https://api.x.ai/v1/chat/completions
+2025-05-28 22:54:52,819 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:55:08,490 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:55:14,038 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 22:55:19,685 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:28:05,412 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 23:28:05,585 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 23:28:05,586 - __main__ - INFO - Бот запускається...
+2025-05-28 23:28:33,625 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:28:33,632 - __main__ - ERROR - Помилка в send_welcome: no such column: user_status
+Traceback (most recent call last):
+  File "C:\Users\петро\Desktop\my_seller_bot\bot.py", line 164, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\петро\Desktop\my_seller_bot\bot.py", line 504, in send_welcome
+    set_user_status(chat_id, 'idle') # Встановлюємо статус "вільний" при старті
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\петро\Desktop\my_seller_bot\bot.py", line 304, in set_user_status
+    cursor.execute("UPDATE users SET user_status = ? WHERE chat_id = ?", (status, chat_id))
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such column: user_status
+2025-05-28 23:33:37,593 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 23:33:37,802 - __main__ - INFO - Колонка 'user_status' додана до таблиці 'users'.
+2025-05-28 23:33:37,804 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 23:33:37,804 - __main__ - INFO - Бот запускається...
+2025-05-28 23:33:58,562 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:34:21,987 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:34:27,320 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:34:41,622 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:34:50,678 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:34:53,698 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:35:02,053 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:35:06,951 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:35:09,460 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:36:24,833 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:36:30,355 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:36:38,945 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:36:53,178 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:37:02,141 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:38:03,502 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:38:03,636 - __main__ - WARNING - XAI API ключ або URL не налаштовані. Використовується заглушка.
+2025-05-28 23:38:16,945 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:38:17,064 - __main__ - WARNING - XAI API ключ або URL не налаштовані. Використовується заглушка.
+2025-05-28 23:38:26,610 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:38:26,705 - __main__ - WARNING - XAI API ключ або URL не налаштовані. Використовується заглушка.
+2025-05-28 23:38:40,427 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:41:30,862 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 23:41:30,864 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-28 23:41:30,866 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 23:41:30,867 - __main__ - INFO - Бот запускається...
+2025-05-28 23:41:54,887 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:42:02,999 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:42:07,116 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:42:25,114 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:42:27,404 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:43:43,313 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:43:54,281 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:44:29,590 - __main__ - ERROR - Помилка під час модерації товару 3, дія approve: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: there is no text in the message to edit
+Traceback (most recent call last):
+  File "C:\Users\петро\Desktop\my_seller_bot\bot.py", line 1777, in handle_product_moderation_callbacks
+    bot.edit_message_text(f"✅ Товар *'{product_name}'* (ID: {product_id}) опубліковано.",
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                          chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='Markdown')
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\__init__.py", line 4997, in edit_message_text
+    result = apihelper.edit_message_text(
+        self.token, text, chat_id=chat_id, message_id=message_id, inline_message_id=inline_message_id,
+        parse_mode=parse_mode, entities=entities, reply_markup=reply_markup, link_preview_options=link_preview_options,
+        business_connection_id=business_connection_id, timeout=timeout)
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 1524, in edit_message_text
+    return _make_request(token, method_url, params=payload, method='post')
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: there is no text in the message to edit
+2025-05-28 23:47:05,829 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:47:05,922 - __main__ - ERROR - Помилка HTTP запиту до Grok API: Invalid URL 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk': No scheme supplied. Perhaps you meant https://xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk?
+2025-05-28 23:47:13,733 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:47:13,844 - __main__ - ERROR - Помилка HTTP запиту до Grok API: Invalid URL 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk': No scheme supplied. Perhaps you meant https://xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk?
+2025-05-28 23:52:54,127 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 23:52:54,193 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-28 23:52:54,195 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 23:52:54,196 - __main__ - INFO - Бот запускається...
+2025-05-28 23:53:11,291 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:53:20,625 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:53:21,088 - __main__ - ERROR - Помилка HTTP запиту до Grok API: 403 Client Error: Forbidden for url: https://api.x.ai/v1/chat/completions
+2025-05-28 23:56:06,658 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:56:10,565 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:56:19,911 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:56:22,853 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:56:29,400 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:57:20,172 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-28 23:57:20,175 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-28 23:57:20,178 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-28 23:57:20,179 - __main__ - INFO - Бот запускається...
+2025-05-28 23:57:42,092 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:57:50,429 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-28 23:57:50,662 - __main__ - ERROR - Помилка HTTP запиту до Grok API: 403 Client Error: Forbidden for url: https://grok.com/
+2025-05-29 00:05:38,127 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-29 00:05:38,194 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-29 00:05:38,196 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-29 00:05:38,196 - __main__ - INFO - Бот запускається...
+2025-05-29 00:06:03,773 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:06:08,896 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:06:32,013 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:06:34,588 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:06:37,956 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:07:20,207 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-29 00:07:20,209 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-29 00:07:20,211 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-29 00:07:20,212 - __main__ - INFO - Бот запускається...
+2025-05-29 00:07:31,412 - __main__ - ERROR - Помилка під час модерації товару 5, дія reject: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\петро\Desktop\my_seller_bot\bot.py", line 1852, in handle_product_moderation_callbacks
+    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\__init__.py", line 5088, in edit_message_reply_markup
+    result = apihelper.edit_message_reply_markup(
+        self.token, chat_id=chat_id, message_id=message_id, inline_message_id=inline_message_id,
+        reply_markup=reply_markup, business_connection_id=business_connection_id, timeout=timeout)
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 1591, in edit_message_reply_markup
+    return _make_request(token, method_url, params=payload, method='post')
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-05-29 00:07:53,155 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:07:58,251 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:08:01,575 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:08:12,395 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:08:14,971 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:08:19,044 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:13:06,458 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-29 00:13:06,461 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-29 00:13:06,463 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-29 00:13:06,464 - __main__ - INFO - Бот запускається...
+2025-05-29 00:13:18,828 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:13:22,544 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:13:47,625 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:13:49,991 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:13:51,851 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:18:40,965 - __main__ - INFO - Запуск ініціалізації БД...
+2025-05-29 00:18:40,968 - __main__ - INFO - Колонка 'user_status' вже існує в таблиці 'users'.
+2025-05-29 00:18:40,969 - __main__ - INFO - База даних ініціалізована або вже існує.
+2025-05-29 00:18:40,970 - __main__ - INFO - Бот запускається...
+2025-05-29 00:18:54,274 - __main__ - ERROR - Помилка під час модерації товару 7, дія reject: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+Traceback (most recent call last):
+  File "C:\Users\петро\Desktop\my_seller_bot\bot.py", line 1868, in handle_product_moderation_callbacks
+    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\__init__.py", line 5088, in edit_message_reply_markup
+    result = apihelper.edit_message_reply_markup(
+        self.token, chat_id=chat_id, message_id=message_id, inline_message_id=inline_message_id,
+        reply_markup=reply_markup, business_connection_id=business_connection_id, timeout=timeout)
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 1591, in edit_message_reply_markup
+    return _make_request(token, method_url, params=payload, method='post')
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 168, in _make_request
+    json_result = _check_result(method_name, result)
+  File "C:\Users\петро\Desktop\my_seller_bot\venv\Lib\site-packages\telebot\apihelper.py", line 195, in _check_result
+    raise ApiTelegramException(method_name, result, result_json)
+telebot.apihelper.ApiTelegramException: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message
+2025-05-29 00:19:03,864 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:19:08,619 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:19:22,600 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:19:24,757 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:19:29,182 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.
+2025-05-29 00:19:35,798 - __main__ - INFO - Користувача 8184456641 збережено/оновлено.

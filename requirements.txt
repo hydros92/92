@@ -6,3 +6,11 @@ pyTelegramBotAPI==4.27.0
 python-dotenv==1.1.0
 requests==2.32.3
 urllib3==2.4.0
+SQLAlchemy
+python-dotenv
+psycopg2-binary
+pyTelegramBotAPI
+python-dotenv
+requests
+Flask
+gunicorn
