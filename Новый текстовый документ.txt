@@ -1,0 +1,24 @@
+# --- 1. Конфігурація Бота ---
+# Рекомендується використовувати змінні середовища для безпеки та легкості конфігурації.
+# Якщо змінні середовища не встановлені, використовуються значення за замовчуванням (тільки для розробки!).
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # ЗАМІНІТЬ ЦЕЙ ТОКЕН НА ВАШ АКТУАЛЬНИЙ!
+ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641')) # ЗАМІНІТЬ НА ВАШ CHAT_ID АДМІНІСТРАТОРА!
+CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ НА ID ВАШОГО КАНАЛУ!
+MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') # ЗАМІНІТЬ НА НОМЕР КАРТКИ!
+
+# XAI (Grok) API налаштування
+XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
+XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
+
+# Heroku Webhook налаштування
+HEROKU_APP_NAME = os.getenv('NaProDash') # Назва вашого додатку на Heroku
+if not HEROKU_APP_NAME:
+    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно.")
+    # Використовуємо заглушку для локального тестування, якщо HEROKU_APP_NAME не встановлено
+    WEBHOOK_URL_BASE = "https://NaProDash.herokuapp.com" # Замініть на реальний URL для локального тестування
+else:
+    WEBHOOK_URL_BASE = f"https://NaProDash.herokuapp.com"
+
+WEBHOOK_URL_PATH = f"/{https://NaProDash.herokuapp.com}/" # Шлях, на який Telegram надсилатиме оновлення
+
+#
