@@ -2,7 +2,7 @@ import sqlite3
 import os
 import telebot
 from telebot import types
-import logging
+import logging # Import logging first
 from datetime import datetime, timedelta
 import re
 import json
@@ -12,6 +12,18 @@ from flask import Flask, request # Імпортуємо Flask
 import time # Додано для time.sleep
 
 load_dotenv()
+
+# --- 2. Налаштування логування (ПЕРЕМІЩЕНО ВГОРУ ДЛЯ РАННЬОЇ ІНІЦІАЛІЗАЦІЇ) ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("bot.log", encoding='utf-8'),
+        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
+    ]
+)
+# Ініціалізуємо об'єкт logger після налаштування basicConfig
+logger = logging.getLogger(__name__)
 
 # --- 1. Конфігурація Бота ---
 # Рекомендується використовувати змінні середовища для безпеки та легкості конфігурації.
@@ -25,23 +37,15 @@ MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') 
 XAI_API_KEY = os.getenv('XAI_API_KEY', 'YOUR_XAI_API_KEY_HERE') # ЗАМІНІТЬ НА ВАШ КЛЮЧ XAI API!
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions') # ЗАМІНІТЬ НА ВАШ URL XAI API, ЯКЩО ВІН ВІДРІЗНЯЄТЬСЯ!
 
-# --- 2. Налаштування логування ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
-    ]
-)
-# Ініціалізуємо об'єкт logger після налаштування basicConfig
-logger = logging.getLogger(__name__)
-
 # Heroku Webhook налаштування
-HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME') # Назва вашого додатку на Heroku (використовуємо коректну назву змінної середовища)
+HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME') # Назва вашого додатку на Heroku
+if HEROKU_APP_NAME:
+    # Видаляємо будь-які лапки, які могли бути випадково збережені в змінній середовища
+    HEROKU_APP_NAME = HEROKU_APP_NAME.strip("'\"")
+
 if not HEROKU_APP_NAME:
     logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
-    WEBHOOK_URL_BASE = "https://your-app-name.herokuapp.com" # Замініть на реальний URL для локального тестування
+    WEBHOOK_URL_BASE = "https://your-app-name.herokuapp.com" # Placeholder для локального тестування
 else:
     WEBHOOK_URL_BASE = f"https://{HEROKU_APP_NAME}.herokuapp.com"
 
@@ -743,7 +747,7 @@ def send_product_step_message(chat_id):
 def process_product_step(message):
     """Обробляє текстовий ввід користувача під час додавання товару."""
     chat_id = message.chat.id
-    current_status = get_user_current_status(chat_id)
+    current_user_status = get_user_current_status(chat_id)
 
     # Визначаємо крок на основі user_data
     if chat_id not in user_data or 'step_number' not in user_data[chat_id]:
