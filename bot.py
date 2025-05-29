@@ -3,19 +3,18 @@ import time
 import logging
 from flask import Flask, request
 from dotenv import load_dotenv
-from telebot import TeleBot, types
 import telebot
-from models import Base  # із models/__init__.py
+from telebot import types
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from models import Base
 
+# --- .env завантаження ---
 load_dotenv()
 
-from flask import Flask, request
-app = Flask(__name__)
+# --- Flask ---
+app = Flask(__name__)  # <- це має бути перед @app.route
 
-
-# --- Logging ---
+# --- Логування ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -31,50 +30,143 @@ MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') 
 XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
 
-# --- Webhook Handler ---
+# --- 4. Управління базою даних (SQLite) ---
+DB_NAME = 'seller_bot.db'
+
+def get_db_connection():
+    """Повертає з'єднання з базою даних SQLite."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row  # Дозволяє отримувати доступ до стовпців за назвою
+    return conn
+
+def init_db():
+    """Ініціалізує базу даних, створюючи необхідні таблиці та оновлюючи схему."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Таблиця користувачів
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            chat_id INTEGER PRIMARY KEY UNIQUE,
+            username TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            is_blocked BOOLEAN DEFAULT FALSE,
+            blocked_by INTEGER,
+            blocked_at TIMESTAMP,
+            commission_paid REAL DEFAULT 0,
+            commission_due REAL DEFAULT 0,
+            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            -- user_status TEXT DEFAULT 'idle' -- Це поле буде додано окремо, якщо його немає
+        )
+    ''')
+
+    # Додаємо колонку user_status, якщо її немає
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'idle'")
+        logger.info("Колонка 'user_status' додана до таблиці 'users'.")
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" in str(e):
+            logger.info("Колонка 'user_status' вже існує в таблиці 'users'.")
+        else:
+            logger.error(f"Помилка при додаванні колонки 'user_status': {e}")
+
+
+    # Таблиця товарів
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            seller_chat_id INTEGER NOT NULL,
+            seller_username TEXT,
+            product_name TEXT NOT NULL,
+            price TEXT NOT NULL,
+            description TEXT NOT NULL,
+            photos TEXT,
+            geolocation TEXT,
+            status TEXT DEFAULT 'pending', -- pending, approved, rejected, sold, expired
+            commission_rate REAL DEFAULT 0.10,
+            commission_amount REAL DEFAULT 0,
+            moderator_id INTEGER,
+            moderated_at TIMESTAMP,
+            admin_message_id INTEGER,
+            channel_message_id INTEGER,
+            views INTEGER DEFAULT 0,
+            promotion_ends_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (seller_chat_id) REFERENCES users (chat_id)
+        )
+    ''')
+
+    # Таблиця для переписок з AI
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_chat_id INTEGER NOT NULL,
+            product_id INTEGER,
+            message_text TEXT,
+            sender_type TEXT, -- 'user' або 'ai'
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_chat_id) REFERENCES users (chat_id),
+            FOREIGN KEY (product_id) REFERENCES products (id)
+        )
+    ''')
+    
+    # Таблиця для транзакцій комісій
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS commission_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            seller_chat_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            status TEXT DEFAULT 'pending_payment', -- pending_payment, paid, cancelled
+            payment_details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            paid_at TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products (id),
+            FOREIGN KEY (seller_chat_id) REFERENCES users (chat_id)
+        )
+    ''')
+
+    # Таблиця статистики
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS statistics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            user_id INTEGER,
+            product_id INTEGER,
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Таблиця для FAQ (Бази знань)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS faq (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT UNIQUE,
+            answer TEXT
+        )
+    ''')
+
+    conn.commit()
+    conn.close()
+    logger.info("База даних ініціалізована або вже існує.")
+
 @app.route(WEBHOOK_PATH, methods=['POST'])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return 'OK', 200
-    return 'Bad request', 400
-
-# --- Стартова команда ---
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, "👋 Вітаю! Бот працює!")
-
-# --- Main ---
-if __name__ == "__main__":
-    logger.info("🚀 Ініціалізація бази та запуск вебхука...")
-    bot.remove_webhook()
-    time.sleep(0.5)
-    bot.set_webhook(url=WEBHOOK_URL)
-    logger.info(f"✅ Вебхук встановлено: {WEBHOOK_URL}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
 
 
 
+# --- Ініціалізація бота ---
+bot = telebot.TeleBot(TOKEN, threaded=False)
 
-# --- 2. Налаштування логування (ПЕРЕМІЩЕНО ВГОРУ ДЛЯ РАННЬОЇ ІНІЦІАЛІЗАЦІЇ) ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
-    ]
-)
-# Ініціалізуємо об'єкт logger після налаштування basicConfig
-logger = logging.getLogger(__name__)
 
-\
-# --- 3. Змінні станів для багатошагових процесів ---
-# Використовується для зберігання тимчасових даних під час додавання товару.
-# Формат: {chat_id: {'step_number': 1, 'data': {'product_name': '', ...}}}
-user_data = {}
 
 # --- 4. Управління базою даних (SQLite) ---
 DB_NAME = 'seller_bot.db'
