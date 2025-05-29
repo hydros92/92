@@ -1,23 +1,25 @@
 import os
-import time
 import logging
+import time
+
 from flask import Flask, request
 from dotenv import load_dotenv
 import telebot
 from telebot import types
-from sqlalchemy import create_engine
-from models import Base
 
-# --- .env завантаження ---
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from models import Base  # твоя ORM модель з models/users.py (або подібна)
+
+# ===================
+# 🌐 Завантаження .env
+# ===================
 load_dotenv()
 
-# --- Flask ---
-app = Flask(__name__)  # <- це має бути перед @app.route
-
-# --- Логування ---
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+# ===================
+# 🔧 Налаштування
+# ===================
 # --- 1. Конфігурація Бота ---
 # Рекомендується використовувати змінні середовища для безпеки та легкості конфігурації.
 # Якщо змінні середовища не встановлені, використовуються значення за замовчуванням (тільки для розробки!).
@@ -29,6 +31,64 @@ MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') 
 # XAI (Grok) API налаштування
 XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("❌ DATABASE_URL не задано!")
+
+# ===================
+# 📦 SQLAlchemy
+# ===================
+engine = create_engine(DATABASE_URL)
+Session = sessionmaker(bind=engine)
+Base.metadata.create_all(engine)
+
+# ===================
+# 🤖 Telegram Bot
+# ===================
+bot = telebot.TeleBot(TOKEN, threaded=False)
+
+# ===================
+# 🌍 Flask App
+# ===================
+app = Flask(__name__)
+
+# ===================
+# 📩 Webhook Handler
+# ===================
+@app.route(WEBHOOK_PATH, methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
+
+# ===================
+# 🔧 Set Webhook
+# ===================
+@app.before_first_request
+def setup_webhook():
+    bot.remove_webhook()
+    time.sleep(1)
+    bot.set_webhook(url=WEBHOOK_URL)
+    logging.info(f"✅ Вебхук встановлено на {WEBHOOK_URL}")
+
+# ===================
+# 🧠 Хендлери
+# ===================
+@bot.message_handler(commands=['start'])
+def start_handler(message):
+    bot.send_message(message.chat.id, "👋 Привіт! Бот працює!")
+
+# ===================
+# 🚀 Запуск
+# ===================
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    logging.info("🚀 Бот запускається...")
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+
+
 
 # --- 4. Управління базою даних (SQLite) ---
 DB_NAME = 'seller_bot.db'
@@ -153,13 +213,6 @@ def init_db():
     conn.commit()
     conn.close()
     logger.info("База даних ініціалізована або вже існує.")
-
-@app.route(WEBHOOK_PATH, methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return '', 200
 
 
 
