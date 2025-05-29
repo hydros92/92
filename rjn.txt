@@ -1,18 +1,28 @@
+import sqlite3
 import os
-import time
-import logging
-from flask import Flask, request
-from dotenv import load_dotenv
-from telebot import TeleBot, types
 import telebot
-from models import Base  # із models/__init__.py
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from telebot import types
+import logging # Import logging first
+from datetime import datetime, timedelta
+import re
+import json
+import requests
+from dotenv import load_dotenv
+from flask import Flask, request # Імпортуємо Flask
+import time # Додано для time.sleep
 
 load_dotenv()
 
-# --- Logging ---
-logging.basicConfig(level=logging.INFO)
+# --- 2. Налаштування логування (ПЕРЕМІЩЕНО ВГОРУ ДЛЯ РАННЬОЇ ІНІЦІАЛІЗАЦІЇ) ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("bot.log", encoding='utf-8'),
+        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
+    ]
+)
+# Ініціалізуємо об'єкт logger після налаштування basicConfig
 logger = logging.getLogger(__name__)
 
 # --- 1. Конфігурація Бота ---
@@ -27,46 +37,23 @@ MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') 
 XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
 
-# --- Webhook Handler ---
-@app.route(WEBHOOK_PATH, methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return 'OK', 200
-    return 'Bad request', 400
+# --- Webhook Settings ---
+# URL, на який Telegram буде надсилати оновлення
+# Для Heroku, це буде https://<YOUR_APP_NAME>.herokuapp.com/webhook/<BOT_TOKEN>
+# Для локального тестування можна використовувати ngrok або подібне, або режим polling
+heroku_app_name_raw = os.getenv('HEROKU_APP_NAME')
+if heroku_app_name_raw:
+    # Видаляємо зайві пробіли або лапки, якщо вони випадково потрапили у змінну
+    HEROKU_APP_NAME = heroku_app_name_raw.strip("'\" ").lower()
+else:
+    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
+    HEROKU_APP_NAME = 'your-app-name' # Заглушка для локального тестування
 
-# --- Стартова команда ---
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, "👋 Вітаю! Бот працює!")
+WEBHOOK_URL_BASE = "https://" + HEROKU_APP_NAME + ".herokuapp.com"
+WEBHOOK_URL_PATH = "/webhook/{}".format(TOKEN)
+bot = telebot.TeleBot(TOKEN)
+app = Flask(__name__) # Ініціалізуємо Flask додаток
 
-# --- Main ---
-if __name__ == "__main__":
-    logger.info("🚀 Ініціалізація бази та запуск вебхука...")
-    bot.remove_webhook()
-    time.sleep(0.5)
-    bot.set_webhook(url=WEBHOOK_URL)
-    logger.info(f"✅ Вебхук встановлено: {WEBHOOK_URL}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-
-
-
-# --- 2. Налаштування логування (ПЕРЕМІЩЕНО ВГОРУ ДЛЯ РАННЬОЇ ІНІЦІАЛІЗАЦІЇ) ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
-    ]
-)
-# Ініціалізуємо об'єкт logger після налаштування basicConfig
-logger = logging.getLogger(__name__)
-
-\
 # --- 3. Змінні станів для багатошагових процесів ---
 # Використовується для зберігання тимчасових даних під час додавання товару.
 # Формат: {chat_id: {'step_number': 1, 'data': {'product_name': '', ...}}}
