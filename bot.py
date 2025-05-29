@@ -37,20 +37,20 @@ MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') 
 XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
 
-# Heroku Webhook налаштування
-HEROKU_APP_NAME = os.getenv('telegram-ad-bot-2025') # Назва вашого додатку на Heroku
-if HEROKU_APP_NAME:
-    # Видаляємо будь-які лапки, які могли бути випадково збережені в змінній середовища
-    HEROKU_APP_NAME = HEROKU_APP_NAME.strip("'\"")
-
-if not HEROKU_APP_NAME:
-    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
-    WEBHOOK_URL_BASE = "https://your-app-name.herokuapp.com" # Placeholder для локального тестування
+# --- Webhook Settings ---
+# URL, на який Telegram буде надсилати оновлення
+# Для Heroku, це буде https://<YOUR_APP_NAME>.herokuapp.com/webhook/<BOT_TOKEN>
+# Для локального тестування можна використовувати ngrok або подібне, або режим polling
+heroku_app_name_raw = os.getenv('HEROKU_APP_NAME')
+if heroku_app_name_raw:
+    # Видаляємо зайві пробіли або лапки, якщо вони випадково потрапили у змінну
+    HEROKU_APP_NAME = heroku_app_name_raw.strip("'\" ").lower()
 else:
-    WEBHOOK_URL_BASE = f"https://{HEROKU_APP_NAME}.herokuapp.com"
+    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
+    HEROKU_APP_NAME = 'your-app-name' # Заглушка для локального тестування
 
-WEBHOOK_URL_PATH = f"/webhook/{TOKEN}" # Шлях, на який Telegram надсилатиме оновлення. Використання TOKEN як частини шляху робить його унікальним.
-
+WEBHOOK_URL_BASE = "https://" + HEROKU_APP_NAME + ".herokuapp.com"
+WEBHOOK_URL_PATH = "/webhook/{}".format(TOKEN)
 bot = telebot.TeleBot(TOKEN)
 app = Flask(__name__) # Ініціалізуємо Flask додаток
 
