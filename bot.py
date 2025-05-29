@@ -34,11 +34,11 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ �
 MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') # ЗАМІНІТЬ НА НОМЕР КАРТКИ!
 
 # XAI (Grok) API налаштування
-XAI_API_KEY = os.getenv('XAI_API_KEY', 'YOUR_XAI_API_KEY_HERE') # ЗАМІНІТЬ НА ВАШ КЛЮЧ XAI API!
-XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions') # ЗАМІНІТЬ НА ВАШ URL XAI API, ЯКЩО ВІН ВІДРІЗНЯЄТЬСЯ!
+XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
+XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
 
 # Heroku Webhook налаштування
-HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME') # Назва вашого додатку на Heroku
+HEROKU_APP_NAME = os.getenv('telegram-ad-bot-2025') # Назва вашого додатку на Heroku
 if HEROKU_APP_NAME:
     # Видаляємо будь-які лапки, які могли бути випадково збережені в змінній середовища
     HEROKU_APP_NAME = HEROKU_APP_NAME.strip("'\"")
