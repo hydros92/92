@@ -11,6 +11,10 @@ from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
 
+from flask import Flask, request
+app = Flask(__name__)
+
+
 # --- Logging ---
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
