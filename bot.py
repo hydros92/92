@@ -76,7 +76,8 @@ def init_db():
         session = Session()
         try:
             inspector = inspect(engine) # Використовуємо інспектор
-            if not inspector.has_column('users', 'user_status'):
+            columns = [col["name"] for col in inspector.get_columns("users")]
+if "user_status" not in columns:
                 with engine.connect() as connection:
                     connection.execute(text("ALTER TABLE users ADD COLUMN user_status VARCHAR DEFAULT 'active'"))
                     connection.commit() # Застосовуємо зміни
