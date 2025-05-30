@@ -44,6 +44,9 @@ XAI_API_KEY = os.getenv('XAI_API_KEY', 'YOUR_XAI_API_KEY_HERE') # ЗАМІНІТ
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions') # ЗАМІНІТЬ НА ВАШ URL XAI API, ЯКЩО ВІН ВІДРІЗНЯЄТЬСЯ!
 
 # Heroku Webhook налаштування
+# --- 3. Налаштування Flask та Webhook ---
+app = Flask(__name__) # Ініціалізація Flask додатку
+# ... (Тут, якщо потрібно, можете додати конфігурацію для Flask) ...
 heroku_app_name_raw = os.getenv('HEROKU_APP_NAME')
 if heroku_app_name_raw:
     # Видаляємо зайві пробіли або лапки, якщо вони випадково потрапили у змінну
@@ -1853,19 +1856,26 @@ def webhook():
         return '<h1>Hi, this is your Telegram bot!</h1>', 200 # Для перевірки, що сервер працює
 
 # --- Запуск бота ---
-if __name__ == '__main__':
-    logger.info("Запуск ініціалізації БД...")
-    init_db() # Викликаємо оновлену функцію ініціалізації
-    
-    # Встановлюємо вебхук при запуску
-    logger.info("Видалення попереднього вебхука...")
-    bot.remove_webhook() # Видаляємо попередній вебхук, якщо він був
-    time.sleep(0.1) # Невелика затримка
+# Ця частина КОДУ МАЄ БУТИ ВИЩЕ ЗАПУСКУ, НЕ В if __name__ == '__main__':
+logger.info("Запуск ініціалізації БД...")
+init_db() # Викликаємо оновлену функцію ініціалізації
 
-    logger.info(f"Встановлення вебхука на: {WEBHOOK_URL_BASE}{WEBHOOK_URL_PATH}")
-    bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
-    
-    logger.info("Бот запускається...")
-    # Запускаємо Flask додаток
-    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
-    logger.info("Бот зупинено.")
+logger.info("Видалення попереднього вебхука...")
+bot.remove_webhook() # Видаляємо попередній вебхук, якщо він був
+time.sleep(0.1) # Невелика затримка
+
+logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}")
+bot.set_webhook(url=WEBHOOK_URL)
+
+logger.info("Бот запускається...")
+
+# --- Webhook обробник для Flask ---
+@app.route(WEBHOOK_URL_PATH, methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return '!', 200
+    else:
+        return '<h1>Hi, this is your Telegram bot!</h1>', 200 # Для перевірки, що сервер працює
