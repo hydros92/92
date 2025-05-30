@@ -2,7 +2,8 @@ import os
 import logging
 import time
 
-from flask import Flask, request
+from flask import Flask, request # Імпортуємо Flask
+app = Flask(__name__) 
 from dotenv import load_dotenv
 import telebot
 from telebot import types
@@ -10,7 +11,7 @@ from telebot import types
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import Base  # твоя ORM модель з models/users.py (або подібна)
+from users import Base, User # Імпортуємо Base та User з users.py
 
 # ===================
 # 🌐 Завантаження .env
@@ -215,6 +216,18 @@ def init_db():
     logger.info("База даних ініціалізована або вже існує.")
 
 
+# ... інша конфігурація бота ...
+
+WEBHOOK_URL_PATH = f'/webhook/{TOKEN}'
+HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME') # Завантажуємо назву додатку Heroku
+
+if not HEROKU_APP_NAME:
+    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
+    WEBHOOK_URL = f'https://your-app-name.herokuapp.com{WEBHOOK_URL_PATH}' # Заглушка
+else:
+    WEBHOOK_URL = f'https://{HEROKU_APP_NAME}.herokuapp.com{WEBHOOK_URL_PATH}'
+
+# ... далі код ...
 
 # --- Ініціалізація бота ---
 bot = telebot.TeleBot(TOKEN, threaded=False)
