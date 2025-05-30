@@ -15,7 +15,7 @@ import time
 # Імпортуємо Base та User з users.py
 # Переконайтесь, що users.py знаходиться в тій же директорії, що й bot.py
 from users import Base, User
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text # Імпортуємо text для виконання RAW SQL
 
