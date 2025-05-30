@@ -75,23 +75,14 @@ def init_db():
         # Перевірка та додавання колонки 'user_status', якщо її немає
         session = Session()
         try:
-            inspector = inspect(engine) # Використовуємо інспектор
-            columns = [col["name"] for col in inspector.get_columns("users")]
-if "user_status" not in columns:
-                with engine.connect() as connection:
-                    connection.execute(text("ALTER TABLE users ADD COLUMN user_status VARCHAR DEFAULT 'active'"))
-                    connection.commit() # Застосовуємо зміни
-                logger.info("Колонка 'user_status' додана до таблиці 'users'.")
-            else:
-                logger.info("Колонка 'user_status' вже існує в таблиці 'users'.")
-        except Exception as e:
-            logger.error(f"Помилка при перевірці/додаванні колонки 'user_status': {e}")
-        finally:
-            session.close()
-
-    except Exception as e:
-        logger.error(f"Помилка ініціалізації бази даних: {e}")
-    logger.info("База даних ініціалізована або вже існує.")
+    inspector = inspect(engine)
+    columns = [col["name"] for col in inspector.get_columns("users")]
+    if "user_status" not in columns:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'active'"))
+            logging.info("Колонка 'user_status' додана до таблиці 'users'.")
+except Exception as e:
+    logging.error(f"Помилка при перевірці/додаванні колонки 'user_status': {e}")
 
 
 # --- Код, який виконується при запуску додатка (НЕ в if __name__ == '__main__':) ---
