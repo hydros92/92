@@ -55,7 +55,7 @@ else:
     logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
     HEROKU_APP_NAME = 'your-app-name' # Заглушка для локального тестування
 
-WEBHOOK_URL_BASE = "https://" + HEROKU_APP_NAME + ".herokuapp.com"
+WEBHOOK_URL_BASE = "https://git.heroku.com/telegram-ad-bot-2025.git"
 WEBHOOK_URL_PATH = f"/webhook/{TOKEN}" # Шлях, на який Telegram надсилатиме оновлення. Використання TOKEN як частини шляху робить його унікальним.
 
 bot = telebot.TeleBot(TOKEN)
@@ -1843,7 +1843,7 @@ def back_to_admin_panel(call):
                           reply_markup=markup, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-# --- Webhook обробник для Flask (Цей блок залишається без змін) ---
+# --- Webhook обробник для Flask ---
 @app.route(WEBHOOK_URL_PATH, methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
@@ -1855,8 +1855,9 @@ def webhook():
         # Це для перевірки, що сервер працює, коли ви відкриваєте URL в браузері
         return '<h1>Hi, this is your Telegram bot!</h1>', 200
 
-# --- КОД ЗАПУСКУ БОТА (ПЕРЕМІЩЕНО ПОЗА `if __name__ == '__main__':` І БЕЗ `app.run()`) ---
+# --- КОД ЗАПУСКУ БОТА ---
 # Цей код буде виконаний автоматично Gunicorn'ом при запуску додатка.
+# Він знаходиться на верхньому рівні (глобальна область видимості) файлу.
 logger.info("Запуск ініціалізації БД...")
 init_db() # Викликаємо функцію ініціалізації БД
 
@@ -1871,3 +1872,4 @@ logger.info("Бот запускається...")
 
 # Кінець файлу. Gunicorn тепер знає, що 'app' це ваш Flask-додаток.
 # НІЯКИХ app.run() тут не повинно бути.
+# ЖОДНОГО if __name__ == '__main__': БЛОКУ ТУТ НЕ ПОВИННО БУТИ НІДЕ У ФАЙЛІ.
