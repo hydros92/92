@@ -1843,8 +1843,7 @@ def back_to_admin_panel(call):
                           reply_markup=markup, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-# --- Webhook обробник для Flask (ПЕРЕМІЩЕНО В КІНЕЦЬ ФАЙЛУ) ---
-# Це важливо, щоб WEBHOOK_URL_PATH та app були визначені до використання.
+# --- Webhook обробник для Flask (Цей блок залишається без змін) ---
 @app.route(WEBHOOK_URL_PATH, methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
@@ -1853,29 +1852,22 @@ def webhook():
         bot.process_new_updates([update])
         return '!', 200
     else:
-        return '<h1>Hi, this is your Telegram bot!</h1>', 200 # Для перевірки, що сервер працює
+        # Це для перевірки, що сервер працює, коли ви відкриваєте URL в браузері
+        return '<h1>Hi, this is your Telegram bot!</h1>', 200
 
-# --- Запуск бота ---
-# Ця частина КОДУ МАЄ БУТИ ВИЩЕ ЗАПУСКУ, НЕ В if __name__ == '__main__':
+# --- КОД ЗАПУСКУ БОТА (ПЕРЕМІЩЕНО ПОЗА `if __name__ == '__main__':` І БЕЗ `app.run()`) ---
+# Цей код буде виконаний автоматично Gunicorn'ом при запуску додатка.
 logger.info("Запуск ініціалізації БД...")
-init_db() # Викликаємо оновлену функцію ініціалізації
+init_db() # Викликаємо функцію ініціалізації БД
 
 logger.info("Видалення попереднього вебхука...")
-bot.remove_webhook() # Видаляємо попередній вебхук, якщо він був
+bot.remove_webhook() # Видаляємо попередній вебхук
 time.sleep(0.1) # Невелика затримка
 
-logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}")
+logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}") # <<-- Тепер WEBHOOK_URL має бути визначений
 bot.set_webhook(url=WEBHOOK_URL)
 
 logger.info("Бот запускається...")
 
-# --- Webhook обробник для Flask ---
-@app.route(WEBHOOK_URL_PATH, methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '!', 200
-    else:
-        return '<h1>Hi, this is your Telegram bot!</h1>', 200 # Для перевірки, що сервер працює
+# Кінець файлу. Gunicorn тепер знає, що 'app' це ваш Flask-додаток.
+# НІЯКИХ app.run() тут не повинно бути.
