@@ -17,11 +17,9 @@ from users import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-load_dotenv()
+load_dotenv() # Завантажуємо змінні середовища на самому початку
 
-# --- 1. Конфігурація Бота ---
-# Рекомендується використовувати змінні середовища для безпеки та легкості конфігурації.
-# Якщо змінні середовища не встановлені, використовуються значення за замовчуванням (тільки для розробки!).
+# --- 1. Конфігурація Бота (Змінні середовища) ---
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # ЗАМІНІТЬ ЦЕЙ ТОКЕН НА ВАШ АКТУАЛЬНИЙ!
 ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641')) # ЗАМІНІТЬ НА ВАШ CHAT_ID АДМІНІСТРАТОРА!
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ НА ID ВАШОГО КАНАЛУ!
@@ -32,7 +30,7 @@ XAI_API_KEY = os.getenv('XAI_API_KEY', 'YOUR_XAI_API_KEY_HERE') # ЗАМІНІТ
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions') # ЗАМІНІТЬ НА ВАШ URL XAI API, ЯКЩО ВІН ВІДРІЗНЯЄТЬСЯ!
 
 
-# --- 2. Налаштування логування (ПЕРЕМІЩЕНО ВГОРУ ДЛЯ РАННЬОЇ ІНІЦІАЛІЗАЦІЇ) ---
+# --- 2. Налаштування логування ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -41,21 +39,23 @@ logging.basicConfig(
         logging.StreamHandler() # Додано для виводу логів в консоль Heroku
     ]
 )
-# Ініціалізуємо об'єкт logger після налаштування basicConfig
 logger = logging.getLogger(__name__)
 
-# --- Конфігурація Webhook та Ініціалізація Бота/Flask (ПЕРЕМІЩЕНО СЮДИ) ---
-# Heroku APP URL та Webhook URL
+# --- 3. Конфігурація Webhook та Ініціалізація Бота/Flask ---
+# Важливо: змінні повинні бути визначені послідовно, з урахуванням залежностей.
 HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
-WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH # <<-- Ця змінна тепер визначена раніше
-WEBHOOK_URL_PATH = f"/webhook/{TOKEN}" # <<-- І ця теж
+HEROKU_APP_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com" # HEROKU_APP_NAME використовується тут
+WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH # HEROKU_APP_URL та WEBHOOK_PATH використовуються тут
+WEBHOOK_URL_PATH = f"/webhook/{TOKEN}"
 
-# Ініціалізація Flask для вебхуків (ВАЖЛИВО: app має бути визначений до @app.route)
+# Ініціалізація Flask для вебхуків (має бути після імпорту Flask)
 app = Flask(__name__)
 
-# Ініціалізація бота (ВАЖЛИВО: bot має бути визначений до використання в обробниках)
+# Ініціалізація бота (має бути після визначення TOKEN)
 bot = telebot.TeleBot(TOKEN)
+
+# --- 4. Ініціалізація Бази Даних (DB) ---
 
 
 
