@@ -1,26 +1,36 @@
+import sqlite3
 import os
-import logging
-import time
-
-from flask import Flask, request # Імпортуємо Flask
-app = Flask(__name__) 
-from dotenv import load_dotenv
 import telebot
 from telebot import types
+import logging # Import logging first
+from datetime import datetime, timedelta
+import re
+import json
+import requests
+from dotenv import load_dotenv
+from flask import Flask, request # Імпортуємо Flask
+import time # Додано для time.sleep
 
+# Імпортуємо Base та User з users.py
+# Переконайтесь, що users.py знаходиться в тій же директорії, що й bot.py
+from users import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from users import Base, User # Імпортуємо Base та User з users.py
-
-# ===================
-# 🌐 Завантаження .env
-# ===================
 load_dotenv()
 
-# ===================
-# 🔧 Налаштування
-# ===================
+# --- 2. Налаштування логування (ПЕРЕМІЩЕНО ВГОРУ ДЛЯ РАННЬОЇ ІНІЦІАЛІЗАЦІЇ) ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("bot.log", encoding='utf-8'),
+        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
+    ]
+)
+# Ініціалізуємо об'єкт logger після налаштування basicConfig
+logger = logging.getLogger(__name__)
+
 # --- 1. Конфігурація Бота ---
 # Рекомендується використовувати змінні середовища для безпеки та легкості конфігурації.
 # Якщо змінні середовища не встановлені, використовуються значення за замовчуванням (тільки для розробки!).
@@ -30,333 +40,96 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ �
 MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') # ЗАМІНІТЬ НА НОМЕР КАРТКИ!
 
 # XAI (Grok) API налаштування
-XAI_API_KEY = os.getenv('XAI_API_KEY', 'xai-ZxqajHNVS3wMUbbsxJvJAXrRuv13bd6O3Imdl5S1bfAjBQD7qrlio2kEltsg5E3mSJByGoSgq1vJgQgk')
-XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions')
+XAI_API_KEY = os.getenv('XAI_API_KEY', 'YOUR_XAI_API_KEY_HERE') # ЗАМІНІТЬ НА ВАШ КЛЮЧ XAI API!
+XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions') # ЗАМІНІТЬ НА ВАШ URL XAI API, ЯКЩО ВІН ВІДРІЗНЯЄТЬСЯ!
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
+# Heroku Webhook налаштування
+heroku_app_name_raw = os.getenv('HEROKU_APP_NAME')
+if heroku_app_name_raw:
+    # Видаляємо зайві пробіли або лапки, якщо вони випадково потрапили у змінну
+    HEROKU_APP_NAME = heroku_app_name_raw.strip("'\" ").lower()
+else:
+    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
+    HEROKU_APP_NAME = 'your-app-name' # Заглушка для локального тестування
+
+WEBHOOK_URL_BASE = "https://" + HEROKU_APP_NAME + ".herokuapp.com"
+WEBHOOK_URL_PATH = f"/webhook/{TOKEN}" # Шлях, на який Telegram надсилатиме оновлення. Використання TOKEN як частини шляху робить його унікальним.
+
+bot = telebot.TeleBot(TOKEN)
+app = Flask(__name__) # Ініціалізуємо Flask додаток ПІСЛЯ імпортів Flask та конфігурації
+
+# ===================
+# 📦 Конфігурація Бази Даних (SQLAlchemy)
+# ===================
+DATABASE_URL_RAW = os.getenv("DATABASE_URL")
+if DATABASE_URL_RAW:
+    DATABASE_URL = DATABASE_URL_RAW.strip() # Видаляємо зайві пробіли
+    if not DATABASE_URL:
+        raise ValueError("❌ DATABASE_URL задано, але порожнє після обробки!")
+else:
     raise ValueError("❌ DATABASE_URL не задано!")
 
-# ===================
-# 📦 SQLAlchemy
-# ===================
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
-Base.metadata.create_all(engine)
+try:
+    engine = create_engine(DATABASE_URL)
+    Session = sessionmaker(bind=engine)
+    Base.metadata.create_all(engine) # Створюємо таблиці, якщо їх немає
+    logger.info("База даних успішно підключена та ініціалізована.")
+except Exception as e:
+    logger.error(f"Помилка підключення або ініціалізації бази даних: {e}", exc_info=True)
+    # Важливо: якщо БД не працює, бот не зможе функціонувати.
+    # Можна вийти або спробувати продовжити з обмеженим функціоналом.
+    # Наразі, ми дозволимо йому впасти, щоб помилка була очевидною.
+    raise
 
-# ===================
-# 🤖 Telegram Bot
-# ===================
-bot = telebot.TeleBot(TOKEN, threaded=False)
+# --- 3. Змінні станів для багатошагових процесів ---
+# Використовується для зберігання тимчасових даних під час додавання товару.
+# Формат: {chat_id: {'step_number': 1, 'data': {'product_name': '', ...}}}
+user_data = {}
 
-# ===================
-# 🌍 Flask App
-# ===================
-app = Flask(__name__)
-
-# ===================
-# 📩 Webhook Handler
-# ===================
-@app.route(WEBHOOK_PATH, methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return '', 200
-
-# ===================
-# 🔧 Set Webhook
-# ===================
-@app.before_first_request
-def setup_webhook():
-    bot.remove_webhook()
-    time.sleep(1)
-    bot.set_webhook(url=WEBHOOK_URL)
-    logging.info(f"✅ Вебхук встановлено на {WEBHOOK_URL}")
-
-# ===================
-# 🧠 Хендлери
-# ===================
-@bot.message_handler(commands=['start'])
-def start_handler(message):
-    bot.send_message(message.chat.id, "👋 Привіт! Бот працює!")
-
-# ===================
-# 🚀 Запуск
-# ===================
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    logging.info("🚀 Бот запускається...")
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
-
-
-# --- 4. Управління базою даних (SQLite) ---
-DB_NAME = 'seller_bot.db'
+# --- 4. Управління базою даних (SQLite - ТЕПЕР SQLAlchemy) ---
+# DB_NAME = 'seller_bot.db' # Більше не використовується для SQLite
 
 def get_db_connection():
-    """Повертає з'єднання з базою даних SQLite."""
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row  # Дозволяє отримувати доступ до стовпців за назвою
-    return conn
+    """Повертає з'єднання з базою даних SQLAlchemy."""
+    return Session() # Повертаємо нову сесію
 
 def init_db():
     """Ініціалізує базу даних, створюючи необхідні таблиці та оновлюючи схему."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Таблиця користувачів
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            chat_id INTEGER PRIMARY KEY UNIQUE,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            is_blocked BOOLEAN DEFAULT FALSE,
-            blocked_by INTEGER,
-            blocked_at TIMESTAMP,
-            commission_paid REAL DEFAULT 0,
-            commission_due REAL DEFAULT 0,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            -- user_status TEXT DEFAULT 'idle' -- Це поле буде додано окремо, якщо його немає
-        )
-    ''')
-
-    # Додаємо колонку user_status, якщо її немає
+    # Ця функція тепер в основному виконується через Base.metadata.create_all(engine)
+    # Але ми можемо додати логіку для оновлення схеми, якщо потрібно.
+    session = Session()
     try:
-        cursor.execute("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'idle'")
-        logger.info("Колонка 'user_status' додана до таблиці 'users'.")
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" in str(e):
-            logger.info("Колонка 'user_status' вже існує в таблиці 'users'.")
-        else:
-            logger.error(f"Помилка при додаванні колонки 'user_status': {e}")
+        # Перевірка та додавання колонки user_status, якщо її немає
+        # Для SQLAlchemy це робиться складніше, ніж для чистого SQLite.
+        # Зазвичай для міграцій використовують Alembic.
+        # Для простоти, ми можемо спробувати додати колонку, якщо її немає,
+        # але це не є ідеальним рішенням для production.
+        conn = engine.raw_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'idle'")
+            logger.info("Колонка 'user_status' додана до таблиці 'users'.")
+        except Exception as e:
+            # Перевіряємо, чи помилка пов'язана з тим, що колонка вже існує
+            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                logger.info("Колонка 'user_status' вже існує в таблиці 'users'.")
+            else:
+                logger.error(f"Помилка при додаванні колонки 'user_status': {e}")
+        finally:
+            cursor.close()
+            conn.close()
 
+        # Таблиця для переписок з AI - перевірка наявності та створення, якщо немає
+        # Це вже робиться через Base.metadata.create_all(engine)
+        # Але якщо ви хочете додати інші таблиці, які не є частиною Base,
+        # або перевірити їх, це місце для цього.
 
-    # Таблиця товарів
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            seller_chat_id INTEGER NOT NULL,
-            seller_username TEXT,
-            product_name TEXT NOT NULL,
-            price TEXT NOT NULL,
-            description TEXT NOT NULL,
-            photos TEXT,
-            geolocation TEXT,
-            status TEXT DEFAULT 'pending', -- pending, approved, rejected, sold, expired
-            commission_rate REAL DEFAULT 0.10,
-            commission_amount REAL DEFAULT 0,
-            moderator_id INTEGER,
-            moderated_at TIMESTAMP,
-            admin_message_id INTEGER,
-            channel_message_id INTEGER,
-            views INTEGER DEFAULT 0,
-            promotion_ends_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (seller_chat_id) REFERENCES users (chat_id)
-        )
-    ''')
+        logger.info("База даних ініціалізована або вже існує.")
+    except Exception as e:
+        logger.error(f"Помилка при ініціалізації БД (init_db): {e}", exc_info=True)
+    finally:
+        session.close()
 
-    # Таблиця для переписок з AI
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS conversations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_chat_id INTEGER NOT NULL,
-            product_id INTEGER,
-            message_text TEXT,
-            sender_type TEXT, -- 'user' або 'ai'
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_chat_id) REFERENCES users (chat_id),
-            FOREIGN KEY (product_id) REFERENCES products (id)
-        )
-    ''')
-    
-    # Таблиця для транзакцій комісій
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS commission_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER NOT NULL,
-            seller_chat_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            status TEXT DEFAULT 'pending_payment', -- pending_payment, paid, cancelled
-            payment_details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            paid_at TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products (id),
-            FOREIGN KEY (seller_chat_id) REFERENCES users (chat_id)
-        )
-    ''')
-
-    # Таблиця статистики
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS statistics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL,
-            user_id INTEGER,
-            product_id INTEGER,
-            details TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Таблиця для FAQ (Бази знань)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS faq (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT UNIQUE,
-            answer TEXT
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
-    logger.info("База даних ініціалізована або вже існує.")
-
-
-# ... інша конфігурація бота ...
-
-WEBHOOK_URL_PATH = f'/webhook/{TOKEN}'
-HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME') # Завантажуємо назву додатку Heroku
-
-if not HEROKU_APP_NAME:
-    logger.warning("Змінна середовища 'HEROKU_APP_NAME' не встановлена. Вебхук може не працювати коректно. Використовуйте заглушку для локального тестування.")
-    WEBHOOK_URL = f'https://your-app-name.herokuapp.com{WEBHOOK_URL_PATH}' # Заглушка
-else:
-    WEBHOOK_URL = f'https://{HEROKU_APP_NAME}.herokuapp.com{WEBHOOK_URL_PATH}'
-
-# ... далі код ...
-
-# --- Ініціалізація бота ---
-bot = telebot.TeleBot(TOKEN, threaded=False)
-
-
-
-# --- 4. Управління базою даних (SQLite) ---
-DB_NAME = 'seller_bot.db'
-
-def get_db_connection():
-    """Повертає з'єднання з базою даних SQLite."""
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row  # Дозволяє отримувати доступ до стовпців за назвою
-    return conn
-
-def init_db():
-    """Ініціалізує базу даних, створюючи необхідні таблиці та оновлюючи схему."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Таблиця користувачів
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            chat_id INTEGER PRIMARY KEY UNIQUE,
-            username TEXT,
-            first_name TEXT,
-            last_name TEXT,
-            is_blocked BOOLEAN DEFAULT FALSE,
-            blocked_by INTEGER,
-            blocked_at TIMESTAMP,
-            commission_paid REAL DEFAULT 0,
-            commission_due REAL DEFAULT 0,
-            last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            -- user_status TEXT DEFAULT 'idle' -- Це поле буде додано окремо, якщо його немає
-        )
-    ''')
-
-    # Додаємо колонку user_status, якщо її немає
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'idle'")
-        logger.info("Колонка 'user_status' додана до таблиці 'users'.")
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" in str(e):
-            logger.info("Колонка 'user_status' вже існує в таблиці 'users'.")
-        else:
-            logger.error(f"Помилка при додаванні колонки 'user_status': {e}")
-
-
-    # Таблиця товарів
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            seller_chat_id INTEGER NOT NULL,
-            seller_username TEXT,
-            product_name TEXT NOT NULL,
-            price TEXT NOT NULL,
-            description TEXT NOT NULL,
-            photos TEXT,
-            geolocation TEXT,
-            status TEXT DEFAULT 'pending', -- pending, approved, rejected, sold, expired
-            commission_rate REAL DEFAULT 0.10,
-            commission_amount REAL DEFAULT 0,
-            moderator_id INTEGER,
-            moderated_at TIMESTAMP,
-            admin_message_id INTEGER,
-            channel_message_id INTEGER,
-            views INTEGER DEFAULT 0,
-            promotion_ends_at TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (seller_chat_id) REFERENCES users (chat_id)
-        )
-    ''')
-
-    # Таблиця для переписок з AI
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS conversations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_chat_id INTEGER NOT NULL,
-            product_id INTEGER,
-            message_text TEXT,
-            sender_type TEXT, -- 'user' або 'ai'
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_chat_id) REFERENCES users (chat_id),
-            FOREIGN KEY (product_id) REFERENCES products (id)
-        )
-    ''')
-    
-    # Таблиця для транзакцій комісій
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS commission_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER NOT NULL,
-            seller_chat_id INTEGER NOT NULL,
-            amount REAL NOT NULL,
-            status TEXT DEFAULT 'pending_payment', -- pending_payment, paid, cancelled
-            payment_details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            paid_at TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products (id),
-            FOREIGN KEY (seller_chat_id) REFERENCES users (chat_id)
-        )
-    ''')
-
-    # Таблиця статистики
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS statistics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action TEXT NOT NULL,
-            user_id INTEGER,
-            product_id INTEGER,
-            details TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Таблиця для FAQ (Бази знань)
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS faq (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            question TEXT UNIQUE,
-            answer TEXT
-        )
-    ''')
-
-    conn.commit()
-    conn.close()
-    logger.info("База даних ініціалізована або вже існує.")
 
 # --- 5. Декоратор для обробки помилок ---
 def error_handler(func):
@@ -403,62 +176,64 @@ def save_user(message_or_user):
         logger.warning("save_user: user або chat_id не визначено.")
         return
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("SELECT chat_id FROM users WHERE chat_id = ?", (chat_id,))
-        exists = cursor.fetchone()
-        if exists:
-            cursor.execute('''
-                UPDATE users SET username = ?, first_name = ?, last_name = ?, last_activity = CURRENT_TIMESTAMP
-                WHERE chat_id = ?
-            ''', (user.username, user.first_name, user.last_name, chat_id))
+        existing_user = session.query(User).filter_by(chat_id=chat_id).first()
+        if existing_user:
+            existing_user.username = user.username
+            existing_user.first_name = user.first_name
+            existing_user.last_name = user.last_name
+            existing_user.last_activity = datetime.now()
         else:
-            cursor.execute('''
-                INSERT INTO users (chat_id, username, first_name, last_name)
-                VALUES (?, ?, ?, ?)
-            ''', (chat_id, user.username, user.first_name, user.last_name))
-        conn.commit()
+            new_user = User(
+                chat_id=chat_id,
+                username=user.username,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                joined_at=datetime.now(),
+                last_activity=datetime.now()
+            )
+            session.add(new_user)
+        session.commit()
         logger.info(f"Користувача {chat_id} збережено/оновлено.")
     except Exception as e:
+        session.rollback()
         logger.error(f"Помилка при збереженні користувача {chat_id}: {e}")
     finally:
-        conn.close()
+        session.close()
 
 @error_handler
 def is_user_blocked(chat_id):
     """Перевіряє, чи заблокований користувач."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("SELECT is_blocked FROM users WHERE chat_id = ?", (chat_id,))
-        result = cursor.fetchone()
-        return result and result['is_blocked']
+        user = session.query(User).filter_by(chat_id=chat_id).first()
+        return user and user.is_blocked
     except Exception as e:
         logger.error(f"Помилка перевірки блокування для {chat_id}: {e}")
         return True # Вважаємо заблокованим у разі помилки для безпеки
     finally:
-        conn.close()
+        session.close()
 
 @error_handler
 def set_user_block_status(admin_id, chat_id, status):
     """Встановлює статус блокування для користувача."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        if status: # Блокування
-            cursor.execute("UPDATE users SET is_blocked = TRUE, blocked_by = ?, blocked_at = CURRENT_TIMESTAMP WHERE chat_id = ?",
-                           (admin_id, chat_id))
-        else: # Розблокування
-            cursor.execute("UPDATE users SET is_blocked = FALSE, blocked_by = NULL, blocked_at = NULL WHERE chat_id = ?",
-                           (chat_id,))
-        conn.commit()
-        return True
+        user = session.query(User).filter_by(chat_id=chat_id).first()
+        if user:
+            user.is_blocked = status
+            user.blocked_by = admin_id if status else None
+            user.blocked_at = datetime.now() if status else None
+            session.commit()
+            return True
+        return False
     except Exception as e:
+        session.rollback()
         logger.error(f"Помилка при встановленні статусу блокування для користувача {chat_id}: {e}")
         return False
     finally:
-        conn.close()
+        session.close()
 
 @error_handler
 def generate_hashtags(description, num_hashtags=5):
@@ -478,74 +253,56 @@ def generate_hashtags(description, num_hashtags=5):
 @error_handler
 def log_statistics(action, user_id=None, product_id=None, details=None):
     """Логує дії користувачів та адміністраторів для статистики."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            INSERT INTO statistics (action, user_id, product_id, details)
-            VALUES (?, ?, ?, ?)
-        ''', (action, user_id, product_id, details))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Помилка логування статистики: {e}")
-    finally:
-        conn.close()
+    # TODO: Реалізувати логування статистики в БД, якщо це потрібно.
+    # Наразі, просто логуємо в консоль/файл.
+    logger.info(f"STATISTIC: Action={action}, User={user_id}, Product={product_id}, Details={details}")
+
 
 # --- Функції для управління статусом користувача ---
 def get_user_current_status(chat_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT user_status FROM users WHERE chat_id = ?", (chat_id,))
-    status = cursor.fetchone()
-    conn.close()
-    return status[0] if status else 'idle'
+    session = get_db_connection()
+    try:
+        user = session.query(User).filter_by(chat_id=chat_id).first()
+        return user.user_status if user else 'idle'
+    except Exception as e:
+        logger.error(f"Помилка отримання статусу користувача {chat_id}: {e}")
+        return 'idle' # Повертаємо 'idle' у разі помилки
+    finally:
+        session.close()
 
 def set_user_status(chat_id, status):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET user_status = ? WHERE chat_id = ?", (status, chat_id))
-    conn.commit()
-    conn.close()
+    session = get_db_connection()
+    try:
+        user = session.query(User).filter_by(chat_id=chat_id).first()
+        if user:
+            user.user_status = status
+            session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Помилка встановлення статусу користувача {chat_id} на {status}: {e}")
+    finally:
+        session.close()
 
 # --- Функції для роботи з FAQ ---
 def add_faq_entry(question, answer):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("INSERT INTO faq (question, answer) VALUES (?, ?)", (question, answer))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError: # Якщо питання вже існує
-        return False
-    finally:
-        conn.close()
+    # TODO: Реалізувати таблицю FAQ та функції для неї
+    logger.warning("Функція add_faq_entry не реалізована в БД.")
+    return False
 
 def get_faq_answer(question_text):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    # Пошук за підстрінгом, щоб знайти релевантні питання
-    # Використовуємо LOWER() для регістронезалежного пошуку
-    cursor.execute("SELECT answer FROM faq WHERE LOWER(question) LIKE ?", (f'%{question_text.lower()}%',))
-    result = cursor.fetchone()
-    conn.close()
-    return result[0] if result else None
+    # TODO: Реалізувати таблицю FAQ та функції для неї
+    logger.warning("Функція get_faq_answer не реалізована в БД.")
+    return None
 
 def delete_faq_entry(faq_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM faq WHERE id = ?", (faq_id,))
-    conn.commit()
-    rows_affected = cursor.rowcount
-    conn.close()
-    return rows_affected > 0
+    # TODO: Реалізувати таблицю FAQ та функції для неї
+    logger.warning("Функція delete_faq_entry не реалізована в БД.")
+    return False
 
 def get_all_faq_entries():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, question, answer FROM faq")
-    entries = cursor.fetchall()
-    conn.close()
-    return entries
+    # TODO: Реалізувати таблицю FAQ та функції для неї
+    logger.warning("Функція get_all_faq_entries не реалізована в БД.")
+    return []
 
 # --- 7. Grok AI інтеграція ---
 @error_handler
@@ -651,43 +408,16 @@ def generate_elon_style_response(prompt):
 @error_handler
 def save_conversation(chat_id, message_text, sender_type, product_id=None):
     """Зберігає повідомлення в історії розмов для контексту AI."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            INSERT INTO conversations (user_chat_id, product_id, message_text, sender_type)
-            VALUES (?, ?, ?, ?)
-        ''', (chat_id, product_id, message_text, sender_type))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Помилка збереження розмови: {e}")
-    finally:
-        conn.close()
+    # TODO: Реалізувати збереження розмов в БД
+    logger.warning("Функція save_conversation не реалізована в БД.")
+    pass
 
 @error_handler
 def get_conversation_history(chat_id, limit=5):
     """Отримує історію розмов для контексту AI."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            SELECT message_text, sender_type FROM conversations 
-            WHERE user_chat_id = ? 
-            ORDER BY timestamp DESC LIMIT ?
-        ''', (chat_id, limit))
-        results = cursor.fetchall()
-        
-        history = []
-        for row in reversed(results):  # Реверс для хронологічного порядку
-            role = "user" if row['sender_type'] == 'user' else "assistant"
-            history.append({"role": role, "content": row['message_text']})
-        
-        return history
-    except Exception as e:
-        logger.error(f"Помилка отримання історії розмов: {e}")
-        return []
-    finally:
-        conn.close()
+    # TODO: Реалізувати отримання історії розмов з БД
+    logger.warning("Функція get_conversation_history не реалізована в БД.")
+    return []
 
 # --- 8. Клавіатури ---
 # Оновлена головна клавіатура
@@ -865,11 +595,16 @@ ADD_PRODUCT_STEPS = {
 def start_add_product_flow(message):
     """Починає процес додавання нового товару."""
     chat_id = message.chat.id
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("SELECT COUNT(*) FROM products WHERE seller_chat_id = ? AND status = 'pending'", (chat_id,))
-        pending_count = cursor.fetchone()['COUNT(*)']
+        # TODO: Замінити на реальну модель Product, коли вона буде реалізована
+        # from your_product_model import Product # Уявімо, що Product імпортується
+        # pending_count = session.query(Product).filter_by(seller_chat_id=chat_id, status='pending').count()
+        
+        # Тимчасова заглушка, поки модель Product не реалізована
+        pending_count = 0 # Припускаємо 0 товарів на модерації для тестування
+        logger.warning("Перевірка кількості товарів на модерації тимчасово відключена (немає моделі Product).")
+
         if pending_count >= 3: # Обмеження на кількість товарів на модерації
             bot.send_message(chat_id,
                             "⚠️ У вас вже є 3 товари на модерації.\n"
@@ -881,7 +616,7 @@ def start_add_product_flow(message):
         bot.send_message(chat_id, "Виникла помилка. Спробуйте пізніше.", reply_markup=main_menu_markup)
         return
     finally:
-        conn.close()
+        session.close()
 
     user_data[chat_id] = {
         'step_number': 1, 
@@ -1046,33 +781,33 @@ def confirm_and_send_for_moderation(chat_id):
     """Зберігає товар у БД, сповіщає користувача та адміністратора про новий товар на модерації."""
     data = user_data[chat_id]['data']
     
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     product_id = None
     try:
         user_info = bot.get_chat(chat_id)
         seller_username = user_info.username if user_info.username else None
 
-        cursor.execute('''
-            INSERT INTO products 
-            (seller_chat_id, seller_username, product_name, price, description, photos, geolocation, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
-        ''', (
-            chat_id,
-            seller_username,
-            data['product_name'],
-            data['price'],
-            data['description'],
-            json.dumps(data['photos']) if data['photos'] else None,
-            json.dumps(data['geolocation']) if data['geolocation'] else None
-        ))
-        
-        product_id = cursor.lastrowid
-        conn.commit()
-        
+        # TODO: Реалізувати модель Product для збереження товару
+        # new_product = Product(
+        #     seller_chat_id=chat_id,
+        #     seller_username=seller_username,
+        #     product_name=data['product_name'],
+        #     price=data['price'],
+        #     description=data['description'],
+        #     photos=json.dumps(data['photos']) if data['photos'] else None,
+        #     geolocation=json.dumps(data['geolocation']) if data['geolocation'] else None,
+        #     status='pending'
+        # )
+        # session.add(new_product)
+        # session.commit()
+        # product_id = new_product.id
+
+        logger.warning("Збереження товару в БД тимчасово відключено (немає моделі Product).")
+        product_id = 99999 # Заглушка для ID товару
+
         # Сповіщення користувача
         bot.send_message(chat_id, 
-            f"✅ Товар '{data['product_name']}' відправлено на модерацію!\n"
+            f"✅ Товар '{data['product_name']}' відправлено на модерацію! (ID: {product_id})\n"
             f"Ви отримаєте сповіщення після перевірки.",
             reply_markup=main_menu_markup)
         
@@ -1086,10 +821,11 @@ def confirm_and_send_for_moderation(chat_id):
         set_user_status(chat_id, 'idle') # Повертаємо статус "вільний"
         
     except Exception as e:
+        session.rollback()
         logger.error(f"Помилка збереження товару: {e}")
         bot.send_message(chat_id, "Помилка збереження товару. Спробуйте пізніше.")
     finally:
-        conn.close()
+        session.close()
 
 @error_handler
 def send_product_for_admin_review(product_id, data, seller_chat_id, seller_username):
@@ -1132,17 +868,8 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
                                        reply_markup=markup)
         
         if admin_msg:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            try:
-                # Оновлюємо admin_message_id для першого повідомлення в медіа-групі
-                cursor.execute("UPDATE products SET admin_message_id = ? WHERE id = ?",
-                               (admin_msg.message_id, product_id))
-                conn.commit()
-            except Exception as e:
-                logger.error(f"Помилка при оновленні admin_message_id для товару {product_id}: {e}")
-            finally:
-                conn.close()
+            # TODO: Зберігати admin_message_id в БД для моделі Product
+            logger.warning(f"admin_message_id для товару {product_id} не збережено (немає моделі Product).")
 
             # Якщо це медіа-група, ми не можемо додати reply_markup до всієї групи.
             # Натомість, ми можемо відправити окреме повідомлення з кнопками.
@@ -1308,22 +1035,20 @@ def handle_messages(message):
 def send_my_products(message):
     """Надсилає користувачу список його товарів."""
     chat_id = message.chat.id
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("""
-            SELECT id, product_name, status, price, created_at, channel_message_id
-            FROM products
-            WHERE seller_chat_id = ?
-            ORDER BY created_at DESC
-        """, (chat_id,))
-        user_products = cursor.fetchall()
+        # TODO: Реалізувати отримання товарів з БД за допомогою моделі Product
+        # from your_product_model import Product
+        # user_products = session.query(Product).filter_by(seller_chat_id=chat_id).order_by(Product.created_at.desc()).all()
+        user_products = [] # Заглушка, поки модель Product не реалізована
+        logger.warning("Отримання товарів користувача тимчасово відключено (немає моделі Product).")
+
     except Exception as e:
         logger.error(f"Помилка при отриманні товарів для користувача {chat_id}: {e}")
         bot.send_message(chat_id, "❌ Не вдалося отримати список ваших товарів.")
         return
     finally:
-        conn.close()
+        session.close()
 
     if user_products:
         response_parts = ["📋 *Ваші товари:*\n\n"]
@@ -1341,17 +1066,17 @@ def send_my_products(message):
                 'rejected': 'відхилено',
                 'sold': 'продано',
                 'expired': 'термін дії закінчився'
-            }.get(product['status'], product['status'])
+            }.get(product['status'], product['status']) # Припускаємо, що product є dict-подібним або має атрибути
 
             product_info = (
-                f"{i}. {status_emoji.get(product['status'], '❓')} *{product['product_name']}*\n"
-                f"   💰 {product['price']}\n"
-                f"   📅 {datetime.strptime(product['created_at'], '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M')}\n"
+                f"{i}. {status_emoji.get(product.status, '❓')} *{product.product_name}*\n"
+                f"   💰 {product.price}\n"
+                f"   📅 {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
                 f"   📊 Статус: {status_ukr}\n"
             )
             
-            if product['status'] == 'approved' and product['channel_message_id']:
-                product_info += f"   🔗 [Переглянути в каналі](https://t.me/c/{str(CHANNEL_ID)[4:]}/{product['channel_message_id']})\n"
+            if product.status == 'approved' and product.channel_message_id:
+                product_info += f"   🔗 [Переглянути в каналі](https://t.me/c/{str(CHANNEL_ID)[4:]}/{product.channel_message_id})\n"
             
             response_parts.append(product_info + "\n")
         
@@ -1489,28 +1214,30 @@ def handle_admin_callbacks(call):
 @error_handler
 def send_admin_statistics(call):
     """Надсилає адміністратору статистику бота."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        # Статистика по товарах
-        cursor.execute("SELECT status, COUNT(*) FROM products GROUP BY status")
-        product_stats = dict(cursor.fetchall())
+        # Статистика по товарах - TODO: Замінити на модель Product
+        # product_stats = session.query(Product.status, func.count(Product.id)).group_by(Product.status).all()
+        # product_stats_dict = {status: count for status, count in product_stats}
+        product_stats_dict = {'pending': 0, 'approved': 0, 'rejected': 0, 'sold': 0, 'expired': 0} # Заглушка
+        logger.warning("Статистика товарів тимчасово відключена (немає моделі Product).")
 
         # Статистика по користувачах
-        total_users = cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        total_users = session.query(User).count()
+        blocked_users_count = session.query(User).filter_by(is_blocked=True).count()
 
-        blocked_users_count = cursor.execute("SELECT COUNT(*) FROM users WHERE is_blocked = TRUE").fetchone()[0]
+        # Статистика за сьогодні - TODO: Замінити на модель Product
+        # today = datetime.now().date()
+        # today_products = session.query(Product).filter(func.date(Product.created_at) == today).count()
+        today_products = 0 # Заглушка
+        logger.warning("Статистика товарів за сьогодні тимчасово відключена (немає моделі Product).")
 
-        # Статистика за сьогодні
-        today = datetime.now().strftime('%Y-%m-%d')
-        cursor.execute("SELECT COUNT(*) FROM products WHERE DATE(created_at) = ?", (today,))
-        today_products = cursor.fetchone()['COUNT(*)']
     except Exception as e:
         logger.error(f"Помилка при отриманні адміністративної статистики: {e}")
         bot.edit_message_text("❌ Помилка при отриманні статистики.", call.message.chat.id, call.message.message_id)
         return
     finally:
-        conn.close()
+        session.close()
 
     stats_text = (
         f"📊 *Статистика бота*\n\n"
@@ -1518,13 +1245,13 @@ def send_admin_statistics(call):
         f"• Всього: {total_users}\n"
         f"• Заблоковані: {blocked_users_count}\n\n"
         f"📦 *Товари:*\n"
-        f"• На модерації: {product_stats.get('pending', 0)}\n"
-        f"• Опубліковано: {product_stats.get('approved', 0)}\n"
-        f"• Відхилено: {product_stats.get('rejected', 0)}\n"
-        f"• Продано: {product_stats.get('sold', 0)}\n"
-        f"• Термін дії закінчився: {product_stats.get('expired', 0)}\n\n"
+        f"• На модерації: {product_stats_dict.get('pending', 0)}\n"
+        f"• Опубліковано: {product_stats_dict.get('approved', 0)}\n"
+        f"• Відхилено: {product_stats_dict.get('rejected', 0)}\n"
+        f"• Продано: {product_stats_dict.get('sold', 0)}\n"
+        f"• Термін дії закінчився: {product_stats_dict.get('expired', 0)}\n\n"
         f"📅 *Сьогодні додано:* {today_products}\n"
-        f"📈 *Всього товарів:* {sum(product_stats.values())}"
+        f"📈 *Всього товарів:* {sum(product_stats_dict.values())}"
     )
 
     markup = types.InlineKeyboardMarkup()
@@ -1536,27 +1263,25 @@ def send_admin_statistics(call):
 @error_handler
 def send_users_list(call):
     """Надсилає адміністратору список користувачів."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("SELECT chat_id, username, first_name, is_blocked FROM users ORDER BY joined_at DESC LIMIT 20")
-        users = cursor.fetchall()
+        users = session.query(User).order_by(User.joined_at.desc()).limit(20).all()
     except Exception as e:
         logger.error(f"Помилка при отриманні списку користувачів: {e}")
         bot.edit_message_text("❌ Помилка при отриманні списку користувачів.", call.message.chat.id, call.message.message_id)
         return
     finally:
-        conn.close()
+        session.close()
 
     if not users:
         response_text = "🤷‍♂️ Немає зареєстрованих користувачів."
     else:
         response_text = "👥 *Список останніх користувачів:*\n\n"
         for user in users:
-            block_status = "🚫 Заблоковано" if user['is_blocked'] else "✅ Активний"
-            username = f"@{user['username']}" if user['username'] else "Немає юзернейму"
-            first_name = user['first_name'] if user['first_name'] else "Невідоме ім'я"
-            response_text += f"- {first_name} ({username}) [ID: `{user['chat_id']}`] - {block_status}\n"
+            block_status = "🚫 Заблоковано" if user.is_blocked else "✅ Активний"
+            username = f"@{user.username}" if user.username else "Немає юзернейму"
+            first_name = user.first_name if user.first_name else "Невідоме ім'я"
+            response_text += f"- {first_name} ({username}) [ID: `{user.chat_id}`] - {block_status}\n"
 
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("⬅️ Назад до Адмін-панелі", callback_data="admin_panel_main"))
@@ -1572,33 +1297,26 @@ def process_user_for_block_unblock(message):
     target_identifier = message.text.strip()
     target_chat_id = None
 
-    if target_identifier.startswith('@'):
-        username = target_identifier[1:]
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute("SELECT chat_id FROM users WHERE username = ?", (username,))
-            result = cursor.fetchone()
-            if result:
-                target_chat_id = result['chat_id']
+    session = get_db_connection()
+    try:
+        if target_identifier.startswith('@'):
+            username = target_identifier[1:]
+            user = session.query(User).filter_by(username=username).first()
+            if user:
+                target_chat_id = user.chat_id
             else:
                 bot.send_message(admin_chat_id, f"Користувача з юзернеймом `{target_identifier}` не знайдено.")
                 set_user_status(admin_chat_id, 'idle') # Скидаємо статус
                 return
-        except Exception as e:
-            logger.error(f"Помилка при пошуку chat_id за юзернеймом: {e}")
-            bot.send_message(admin_chat_id, "❌ Помилка при пошуку користувача.")
-            set_user_status(admin_chat_id, 'idle') # Скидаємо статус
-            return
-        finally:
-            conn.close()
-    else:
-        try:
-            target_chat_id = int(target_identifier)
-        except ValueError:
-            bot.send_message(admin_chat_id, "Будь ласка, введіть дійсний `chat_id` (число) або `@username`.")
-            set_user_status(admin_chat_id, 'idle') # Скидаємо статус
-            return
+        else:
+            try:
+                target_chat_id = int(target_identifier)
+            except ValueError:
+                bot.send_message(admin_chat_id, "Будь ласка, введіть дійсний `chat_id` (число) або `@username`.")
+                set_user_status(admin_chat_id, 'idle') # Скидаємо статус
+                return
+    finally:
+        session.close()
 
     if target_chat_id == ADMIN_CHAT_ID:
         bot.send_message(admin_chat_id, "Ви не можете заблокувати/розблокувати себе.")
@@ -1662,23 +1380,19 @@ def handle_user_block_callbacks(call):
 @error_handler
 def send_pending_products_for_moderation(call):
     """Надсилає адміністратору товари, що очікують модерації."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("""
-            SELECT id, seller_chat_id, seller_username, product_name, price, description, photos, geolocation, created_at
-            FROM products
-            WHERE status = 'pending'
-            ORDER BY created_at ASC
-            LIMIT 5
-        """)
-        pending_products = cursor.fetchall()
+        # TODO: Реалізувати отримання товарів з БД за допомогою моделі Product
+        # from your_product_model import Product
+        # pending_products = session.query(Product).filter_by(status='pending').order_by(Product.created_at.asc()).limit(5).all()
+        pending_products = [] # Заглушка
+        logger.warning("Отримання товарів на модерацію тимчасово відключено (немає моделі Product).")
     except Exception as e:
         logger.error(f"Помилка при отриманні товарів на модерацію: {e}")
         bot.edit_message_text("❌ Помилка при отриманні товарів на модерацію.", call.message.chat.id, call.message.message_id)
         return
     finally:
-        conn.close()
+        session.close()
 
     if not pending_products:
         response_text = "🎉 Немає товарів на модерації."
@@ -1705,33 +1419,28 @@ def send_pending_products_for_moderation(call):
 @error_handler
 def send_admin_commissions_info(call):
     """Надсилає адміністратору інформацію про комісії."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("""
-            SELECT 
-                SUM(CASE WHEN status = 'pending_payment' THEN amount ELSE 0 END) AS total_pending,
-                SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) AS total_paid
-            FROM commission_transactions
-        """)
-        commission_summary = cursor.fetchone()
+        # TODO: Реалізувати моделі для комісій та статистики
+        # commission_summary = session.query(
+        #     func.sum(case((CommissionTransaction.status == 'pending_payment', CommissionTransaction.amount), else_=0)).label('total_pending'),
+        #     func.sum(case((CommissionTransaction.status == 'paid', CommissionTransaction.amount), else_=0)).label('total_paid')
+        # ).first()
+        # recent_transactions = session.query(
+        #     CommissionTransaction.product_id, Product.product_name, Product.seller_chat_id, User.username,
+        #     CommissionTransaction.amount, CommissionTransaction.status, CommissionTransaction.created_at
+        # ).join(Product).join(User).order_by(CommissionTransaction.created_at.desc()).limit(10).all()
 
-        cursor.execute("""
-            SELECT ct.product_id, p.product_name, p.seller_chat_id, u.username, ct.amount, ct.status, ct.created_at
-            FROM commission_transactions ct
-            JOIN products p ON ct.product_id = p.id
-            JOIN users u ON p.seller_chat_id = u.chat_id
-            ORDER BY ct.created_at DESC
-            LIMIT 10
-        """)
-        recent_transactions = cursor.fetchall()
+        commission_summary = {'total_pending': 0, 'total_paid': 0} # Заглушка
+        recent_transactions = [] # Заглушка
+        logger.warning("Статистика комісій тимчасово відключена (немає моделей).")
 
     except Exception as e:
         logger.error(f"Помилка при отриманні інформації про комісії: {e}")
         bot.edit_message_text("❌ Помилка при отриманні інформації про комісії.", call.message.chat.id, call.message.message_id)
         return
     finally:
-        conn.close()
+        session.close()
 
     text = (
         f"💰 *Статистика комісій*\n\n"
@@ -1742,12 +1451,12 @@ def send_admin_commissions_info(call):
 
     if recent_transactions:
         for tx in recent_transactions:
-            username = f"@{tx['username']}" if tx['username'] else f"ID: {tx['seller_chat_id']}"
+            username = f"@{tx.username}" if tx.username else f"ID: {tx.seller_chat_id}"
             text += (
-                f"- Товар ID `{tx['product_id']}` ({tx['product_name']})\n"
+                f"- Товар ID `{tx.product_id}` ({tx.product_name})\n"
                 f"  Продавець: {username}\n"
-                f"  Сума: {tx['amount']:.2f} грн, Статус: {tx['status']}\n"
-                f"  Дата: {datetime.strptime(tx['created_at'], '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M')}\n\n"
+                f"  Сума: {tx.amount:.2f} грн, Статус: {tx.status}\n"
+                f"  Дата: {tx.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             )
     else:
         text += "  Немає транзакцій комісій.\n\n"
@@ -1760,38 +1469,24 @@ def send_admin_commissions_info(call):
 @error_handler
 def send_admin_ai_statistics(call):
     """Надсилає адміністратору статистику використання AI."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     try:
-        cursor.execute("SELECT COUNT(*) FROM conversations WHERE sender_type = 'user'")
-        total_user_queries = cursor.fetchone()[0]
+        # TODO: Реалізувати модель Conversation
+        # total_user_queries = session.query(Conversation).filter_by(sender_type='user').count()
+        # top_ai_users = session.query(Conversation.user_chat_id, func.count(Conversation.id).label('query_count')).filter_by(sender_type='user').group_by(Conversation.user_chat_id).order_by(text('query_count DESC')).limit(5).all()
+        # daily_ai_queries = session.query(func.date(Conversation.timestamp).label('date'), func.count(Conversation.id).label('query_count')).filter_by(sender_type='user').group_by(text('date')).order_by(text('date DESC')).limit(7).all()
 
-        cursor.execute("""
-            SELECT user_chat_id, COUNT(*) as query_count
-            FROM conversations
-            WHERE sender_type = 'user'
-            GROUP BY user_chat_id
-            ORDER BY query_count DESC
-            LIMIT 5
-        """)
-        top_ai_users = cursor.fetchall()
-
-        cursor.execute("""
-            SELECT DATE(timestamp) as date, COUNT(*) as query_count
-            FROM conversations
-            WHERE sender_type = 'user'
-            GROUP BY DATE(timestamp)
-            ORDER BY date DESC
-            LIMIT 7
-        """)
-        daily_ai_queries = cursor.fetchall()
+        total_user_queries = 0 # Заглушка
+        top_ai_users = [] # Заглушка
+        daily_ai_queries = [] # Заглушка
+        logger.warning("Статистика AI тимчасово відключена (немає моделі Conversation).")
 
     except Exception as e:
         logger.error(f"Помилка при отриманні AI статистики: {e}")
         bot.edit_message_text("❌ Помилка при отриманні AI статистики.", call.message.chat.id, call.message.message_id)
         return
     finally:
-        conn.close()
+        session.close()
 
     text = (
         f"🤖 *Статистика AI Помічника*\n\n"
@@ -1800,17 +1495,17 @@ def send_admin_ai_statistics(call):
     )
     if top_ai_users:
         for user_data in top_ai_users:
-            user_id = user_data['user_chat_id']
+            user_id = user_data.user_chat_id
             user_info = bot.get_chat(user_id)
             username = f"@{user_info.username}" if user_info.username else f"ID: {user_id}"
-            text += f"- {username}: {user_data['query_count']} запитів\n"
+            text += f"- {username}: {user_data.query_count} запитів\n"
     else:
         text += "  Немає даних.\n"
 
     text += "\n📅 *Запити за останні 7 днів:*\n"
     if daily_ai_queries:
         for day_data in daily_ai_queries:
-            text += f"- {day_data['date']}: {day_data['query_count']} запитів\n"
+            text += f"- {day_data.date}: {day_data.query_count} запитів\n"
     else:
         text += "  Немає даних.\n"
 
@@ -1853,7 +1548,7 @@ def handle_admin_faq_callbacks(call):
             response_text = "🤷‍♂️ База знань FAQ порожня."
         else:
             response_text = "📚 *Всі питання та відповіді (FAQ):*\n\n"
-            for faq_id, question, answer in all_faq:
+            for faq_id, question, answer in all_faq: # Припускаємо, що all_faq повертає кортежі
                 response_text += f"*{faq_id}. Питання*: {question}\n"
                 response_text += f"*Відповідь*: {answer}\n\n"
         
@@ -1891,24 +1586,37 @@ def handle_product_moderation_callbacks(call):
     action = data_parts[0]
     product_id = int(data_parts[1])
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    session = get_db_connection()
     product_info = None
     try:
-        cursor.execute("""
-            SELECT seller_chat_id, product_name, price, description, photos, geolocation, admin_message_id, channel_message_id, status
-            FROM products WHERE id = ?
-        """, (product_id,))
-        product_info = cursor.fetchone()
+        # TODO: Реалізувати отримання товару з БД за допомогою моделі Product
+        # from your_product_model import Product
+        # product_info = session.query(Product).filter_by(id=product_id).first()
+        
+        # Заглушка для product_info, якщо модель Product не реалізована
+        product_info = {
+            'id': product_id,
+            'seller_chat_id': 12345, # Заглушка
+            'product_name': 'Тестовий товар', # Заглушка
+            'price': '100 грн', # Заглушка
+            'description': 'Це тестовий опис товару для модерації.', # Заглушка
+            'photos': '[]', # Заглушка
+            'geolocation': 'null', # Заглушка
+            'admin_message_id': call.message.message_id, # Використовуємо поточний message_id для оновлення
+            'channel_message_id': None, # Заглушка
+            'status': 'pending' # Заглушка
+        }
+        logger.warning(f"Отримання інформації про товар {product_id} тимчасово відключено (немає моделі Product).")
+
     except Exception as e:
         logger.error(f"Помилка при отриманні інформації про товар {product_id} для модерації: {e}")
         bot.answer_callback_query(call.id, "❌ Помилка при отриманні інформації про товар.")
-        conn.close()
+        session.close()
         return
 
     if not product_info:
         bot.answer_callback_query(call.id, "Товар не знайдено.")
-        conn.close()
+        session.close()
         return
 
     seller_chat_id = product_info['seller_chat_id']
@@ -1967,12 +1675,14 @@ def handle_product_moderation_callbacks(call):
                 new_channel_message_id = published_message.message_id
 
             if new_channel_message_id: # Перевіряємо, чи повідомлення було успішно надіслано в канал
-                cursor.execute("""
-                    UPDATE products SET status = 'approved', moderator_id = ?, moderated_at = CURRENT_TIMESTAMP,
-                    channel_message_id = ?
-                    WHERE id = ?
-                """, (call.message.chat.id, new_channel_message_id, product_id))
-                conn.commit()
+                # TODO: Оновити статус товару в БД на 'approved' та зберегти channel_message_id
+                # product_info.status = 'approved'
+                # product_info.moderator_id = call.message.chat.id
+                # product_info.moderated_at = datetime.now()
+                # product_info.channel_message_id = new_channel_message_id
+                # session.commit()
+                logger.warning(f"Статус товару {product_id} не оновлено в БД (немає моделі Product).")
+
                 log_statistics('product_approved', call.message.chat.id, product_id)
                 bot.send_message(seller_chat_id,
                                  f"✅ Ваш товар '{product_name}' успішно опубліковано в каналі! [Переглянути](https://t.me/c/{str(CHANNEL_ID)[4:]}/{new_channel_message_id})",
@@ -2006,11 +1716,13 @@ def handle_product_moderation_callbacks(call):
                 bot.answer_callback_query(call.id, f"Товар вже має статус '{current_status}'.")
                 return
 
-            cursor.execute("""
-                UPDATE products SET status = 'rejected', moderator_id = ?, moderated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (call.message.chat.id, product_id))
-            conn.commit()
+            # TODO: Оновити статус товару в БД на 'rejected'
+            # product_info.status = 'rejected'
+            # product_info.moderator_id = call.message.chat.id
+            # product_info.moderated_at = datetime.now()
+            # session.commit()
+            logger.warning(f"Статус товару {product_id} не оновлено в БД (немає моделі Product).")
+
             log_statistics('product_rejected', call.message.chat.id, product_id)
             bot.send_message(seller_chat_id,
                              f"❌ Ваш товар '{product_name}' було відхилено адміністратором.\n\n"
@@ -2043,12 +1755,13 @@ def handle_product_moderation_callbacks(call):
 
             if channel_message_id:
                 try:
-                    # Оновлюємо статус в базі даних
-                    cursor.execute("""
-                        UPDATE products SET status = 'sold', moderator_id = ?, moderated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (call.message.chat.id, product_id))
-                    conn.commit()
+                    # TODO: Оновити статус товару в БД на 'sold'
+                    # product_info.status = 'sold'
+                    # product_info.moderator_id = call.message.chat.id
+                    # product_info.moderated_at = datetime.now()
+                    # session.commit()
+                    logger.warning(f"Статус товару {product_id} не оновлено в БД (немає моделі Product).")
+
                     log_statistics('product_sold', call.message.chat.id, product_id)
 
                     # Оновлюємо повідомлення в каналі, додаючи "ПРОДАНО!"
@@ -2095,10 +1808,11 @@ def handle_product_moderation_callbacks(call):
                 bot.send_message(call.message.chat.id, "Цей товар ще не опубліковано в каналі, або повідомлення в каналі відсутнє. Не можна відмітити як проданий.")
                 bot.answer_callback_query(call.id, "Товар не опубліковано в каналі.")
     except Exception as e:
+        session.rollback() # Відкочуємо зміни у разі помилки
         logger.error(f"Помилка під час модерації товару {product_id}, дія {action}: {e}", exc_info=True)
         bot.send_message(call.message.chat.id, f"❌ Виникла помилка під час виконання дії '{action}' для товару {product_id}.")
     finally:
-        conn.close()
+        session.close()
     bot.answer_callback_query(call.id)
 
 # --- 17. Повернення до адмін-панелі після колбеку ---
@@ -2126,7 +1840,8 @@ def back_to_admin_panel(call):
                           reply_markup=markup, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-# --- Webhook обробник для Flask --
+# --- Webhook обробник для Flask (ПЕРЕМІЩЕНО В КІНЕЦЬ ФАЙЛУ) ---
+# Це важливо, щоб WEBHOOK_URL_PATH та app були визначені до використання.
 @app.route(WEBHOOK_URL_PATH, methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
