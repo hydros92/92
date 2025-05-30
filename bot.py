@@ -1,23 +1,26 @@
+
 import sqlite3
 import os
 import telebot
 from telebot import types
-import logging # Import logging first
+import logging
 from datetime import datetime, timedelta
 import re
 import json
 import requests
 from dotenv import load_dotenv
-from flask import Flask, request # Імпортуємо Flask
-import time # Додано для time.sleep
+from flask import Flask, request
+import time
 
 # Імпортуємо Base та User з users.py
 # Переконайтесь, що users.py знаходиться в тій же директорії, що й bot.py
 from users import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text # Імпортуємо text для виконання RAW SQL
 
-load_dotenv() # Завантажуємо змінні середовища на самому початку
+# Завантажуємо змінні середовища на самому початку
+load_dotenv()
 
 # --- 1. Конфігурація Бота (Змінні середовища) ---
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # ЗАМІНІТЬ ЦЕЙ ТОКЕН НА ВАШ АКТУАЛЬНИЙ!
@@ -29,14 +32,13 @@ MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') 
 XAI_API_KEY = os.getenv('XAI_API_KEY', 'YOUR_XAI_API_KEY_HERE') # ЗАМІНІТЬ НА ВАШ КЛЮЧ XAI API!
 XAI_API_URL = os.getenv('XAI_API_URL', 'https://api.x.ai/v1/chat/completions') # ЗАМІНІТЬ НА ВАШ URL XAI API, ЯКЩО ВІН ВІДРІЗНЯЄТЬСЯ!
 
-
 # --- 2. Налаштування логування ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler("bot.log", encoding='utf-8'),
-        logging.StreamHandler() # Додано для виводу логів в консоль Heroku
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
@@ -48,6 +50,77 @@ WEBHOOK_PATH = f"/webhook/{TOKEN}"
 HEROKU_APP_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com" # HEROKU_APP_NAME використовується тут
 WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH # HEROKU_APP_URL та WEBHOOK_PATH використовуються тут
 WEBHOOK_URL_PATH = f"/webhook/{TOKEN}"
+
+# Ініціалізація Flask для вебхуків (має бути після імпорту Flask)
+app = Flask(__name__)
+
+# Ініціалізація бота (має бути після визначення TOKEN)
+bot = telebot.TeleBot(TOKEN)
+
+# --- 4. Ініціалізація Бази Даних (DB) ---
+DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
+if DATABASE_URL.startswith("postgres://"):
+    # Перетворюємо URL для SQLAlchemy, якщо це Heroku PostgreSQL
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
+Session = sessionmaker(bind=engine)
+
+def init_db():
+    try:
+        # Створюємо всі таблиці, визначені в Base (users.py)
+        Base.metadata.create_all(engine)
+        logger.info("База даних успішно підключена та ініціалізована.")
+
+        # Перевірка та додавання колонки 'user_status', якщо її немає
+        session = Session()
+        try:
+            inspector = inspect(engine) # Використовуємо інспектор
+            if not inspector.has_column('users', 'user_status'):
+                with engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE users ADD COLUMN user_status VARCHAR DEFAULT 'active'"))
+                    connection.commit() # Застосовуємо зміни
+                logger.info("Колонка 'user_status' додана до таблиці 'users'.")
+            else:
+                logger.info("Колонка 'user_status' вже існує в таблиці 'users'.")
+        except Exception as e:
+            logger.error(f"Помилка при перевірці/додаванні колонки 'user_status': {e}")
+        finally:
+            session.close()
+
+    except Exception as e:
+        logger.error(f"Помилка ініціалізації бази даних: {e}")
+    logger.info("База даних ініціалізована або вже існує.")
+
+
+# --- Код, який виконується при запуску додатка (НЕ в if __name__ == '__main__':) ---
+# Цей код буде виконаний Gunicorn'ом при запуску кожного робочого процесу.
+# Для уникнення "Too Many Requests", ми додамо обробку винятків і паузу.
+
+# Викликаємо ініціалізацію БД
+init_db()
+
+# Логіка встановлення вебхука:
+try:
+    logger.info("Видалення попереднього вебхука...")
+    bot.remove_webhook()
+    time.sleep(0.5) # Невелика затримка, щоб уникнути rate limiting
+
+    logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}")
+    bot.set_webhook(url=WEBHOOK_URL)
+    logger.info("Вебхук успішно встановлено.")
+except telebot.apihelper.ApiTelegramException as e:
+    if e.error_code == 429:
+        logger.warning(f"Отримано 'Too Many Requests' при встановленні вебхука. Це очікувано, якщо працює кілька Gunicorn-воркерів: {e}")
+        # Якщо ви впевнені, що перший воркер вже встановив його, можна проігнорувати для наступних
+    else:
+        logger.error(f"Помилка Telegram API при встановленні вебхука: {e}")
+except Exception as e:
+    logger.error(f"Неочікувана помилка при встановленні вебхука: {e}")
+
+logger.info("Бот запускається...")
+
+# --- Webhook обробник для Flask (далі по файлу, як у вас є) --
 
 # Ініціалізація Flask для вебхуків (має бути після імпорту Flask)
 app = Flask(__name__)
