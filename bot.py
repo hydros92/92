@@ -68,21 +68,19 @@ Session = sessionmaker(bind=engine)
 
 def init_db():
     try:
-        # Створюємо всі таблиці, визначені в Base (users.py)
-        Base.metadata.create_all(engine)
-        logger.info("База даних успішно підключена та ініціалізована.")
 
-        # Перевірка та додавання колонки 'user_status', якщо її немає
-        session = Session()
-        try:
-    inspector = inspect(engine)
-    columns = [col["name"] for col in inspector.get_columns("users")]
-    if "user_status" not in columns:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'active'"))
-            logging.info("Колонка 'user_status' додана до таблиці 'users'.")
-except Exception as e:
-    logging.error(f"Помилка при перевірці/додаванні колонки 'user_status': {e}")
+        inspector = inspect(engine)
+        columns = [col["name"] for col in inspector.get_columns("users")]
+        if "user_status" not in columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'active'"))
+                logging.info("Колонка 'user_status' додана до таблиці 'users'.")
+    except Exception as e:
+        logging.error(f"Помилка при перевірці/додаванні колонки 'user_status': {e}")
+
+    # Інші ініціалізаційні команди, якщо є
+    Base.metadata.create_all(engine)
+    logging.info("База даних ініціалізована або вже існує.")
 
 # --- Код, який виконується при запуску додатка (НЕ в if __name__ == '__main__':) ---
 # Цей код буде виконаний Gunicorn'ом при запуску кожного робочого процесу.
