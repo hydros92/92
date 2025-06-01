@@ -19,6 +19,14 @@ from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text # Імпортуємо text для виконання RAW SQL
 
+from flask import Flask, request
+import telebot
+
+app = Flask(__name__)
+bot = telebot.TeleBot(TOKEN)
+
+WEBHOOK_PATH = f"/webhook/{TOKEN}"  # <- важливо
+
 # Завантажуємо змінні середовища на самому початку
 load_dotenv()
 
@@ -1930,5 +1938,4 @@ def webhook():
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
         return '', 200
-    else:
-        return 'Unsupported Media Type', 415
+    return 'Unsupported Media Type', 415
