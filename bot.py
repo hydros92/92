@@ -20,17 +20,21 @@ import telebot
 import os
 from dotenv import load_dotenv
 
+app = Flask(__name__)
+
 # Завантажуємо змінні середовища на самому початку
 load_dotenv()
 
 # --- 1. Конфігурація Бота (Змінні середовища) ---
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # Define TOKEN first
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU')
 ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641'))
 
-app = Flask(__name__)
-bot = telebot.TeleBot(TOKEN) # Now TOKEN is defined when used
-WEBHOOK_PATH = f"/webhook/{TOKEN}"
+# Важливо: WEBHOOK_URL повинен бути повним URL вашого додатка на Heroku
+# Замініть 'telegram-ad-bot-2025' на актуальне ім'я вашого додатку Heroku, якщо воно відрізняється
+WEBHOOK_URL = f"https://telegram-ad-bot-2025.herokuapp.com/webhook/{TOKEN}"
 
+
+bot = telebot.TeleBot(TOKEN)
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ НА ID ВАШОГО КАНАЛУ!
 MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') # ЗАМІНІТЬ НА НОМЕР КАРТКИ!
 
@@ -483,6 +487,20 @@ main_menu_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 main_menu_markup.add(types.KeyboardButton("🔥 Продати товар"), types.KeyboardButton("🛒 Мої товари"))
 main_menu_markup.add(types.KeyboardButton("❓ Допомога"), types.KeyboardButton("🤖 Запитати AI"))
 main_menu_markup.add(types.KeyboardButton("🎁 Персональна пропозиція"), types.KeyboardButton("👨‍💻 Зв'язатися з адміном"))
+
+
+# Цей маршрут приймає POST-запити від Telegram на URL вебхука
+@app.route(f"/webhook/{TOKEN}", methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return '', 200 # Важливо: Telegram очікує 200 OK
+    else:
+        # Якщо запит не в форматі JSON, повертаємо 403 Forbidden
+        return 'Bad Request', 403
+
 
 
 # --- 9. Обробники команд ---
@@ -1909,8 +1927,16 @@ logger.info("Видалення попереднього вебхука...")
 bot.remove_webhook() # Видаляємо попередній вебхук
 time.sleep(0.1) # Невелика затримка
 
-logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}") # <<-- Тепер WEBHOOK_URL має бути визначений
-bot.set_webhook(url=WEBHOOK_URL)
+# ... (ваш існуючий код запуску бота, як було змінено раніше) ...
+logger.info("Запуск ініціалізації БД...")
+init_db()
+
+logger.info("Видалення попереднього вебхука...")
+bot.remove_webhook()
+time.sleep(0.1)
+
+logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}")
+bot.set_webhook(url=WEBHOOK_URL) # Переконайтесь, що тут використовується WEBHOOK_URL, а не WEBHOOK_PATH
 
 logger.info("Бот запускається...")
 
@@ -1926,3 +1952,4 @@ def webhook():
         bot.process_new_updates([update])
         return '', 200
     return 'Unsupported Media Type', 415
+
