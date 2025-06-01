@@ -8,7 +8,7 @@ import re
 import json
 import requests
 from dotenv import load_dotenv
-from flask import Flask, request
+from flask import Flask, request, abort # <<-- ДОДАЙТЕ 'abort' сюди
 import time
 
 # --- Завантажуємо змінні середовища НАЙПЕРШЕ ---
@@ -21,14 +21,52 @@ WEBHOOK_HOST = os.getenv('WEBHOOK_HOST', 'https://telegram-ad-bot-2025.herokuapp
 WEBHOOK_PATH = f"/webhook/{TOKEN}"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
-# --- Імпортуємо Base та User з users.py ---
+# Імпортуємо Base та User з users.py
+# Переконайтесь, що users.py знаходиться в тій же директорії, що й bot.py
 from users import Base, User
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
-
+from sqlalchemy import text # Імпортуємо text для виконання RAW SQL
 # --- Ініціалізуємо Flask додаток та TeleBot ПІСЛЯ визначення TOKEN ---
 app = Flask(__name__)
 bot = telebot.TeleBot(TOKEN)
+
+WEBHOOK_PATH = f"/webhook/{TOKEN}"  # <- Важливо, має бути до WEBHOOK_URL
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}" # <<-- Переконайтесь, що WEBHOOK_URL тут визначено
+
+
+# --- НОВЕ: Базовий маршрут для тестування (Flask працює?) ---
+@app.route('/', methods=['GET'])
+def index():
+    logger.info("Root path '/' hit. (Базовий шлях '/' отримано)")
+    return 'Bot is running! (Бот працює!)', 200
+
+# --- НОВЕ: Користувацький обробник помилки 404 ---
+@app.errorhandler(404)
+def page_not_found(e):
+    logger.error(f"404 Not Found error detected: {request.url} (Виявлено помилку 404 Not Found)")
+    return "404 Not Found (Помилка 404 Not Found)", 404
+
+
+# --- Існуючий маршрут вебхука ---
+@app.route(WEBHOOK_PATH, methods=['POST'])
+def webhook():
+    logger.info("Webhook endpoint hit! (Кінцева точка вебхука досягнута!)")
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        logger.info(f"Received JSON update: {json_string[:200]}... (Отримано JSON оновлення)")
+        try:
+            bot.process_new_updates([update])
+            logger.info("Successfully processed Telegram update. (Оновлення Telegram успішно оброблено.)")
+        except Exception as e:
+            logger.error(f"Error processing update: {e}", exc_info=True)
+        return '', 200
+    else:
+        logger.warning(f"Received non-JSON request to webhook: {request.headers.get('content-type')} (Отримано не-JSON запит до вебхука)")
+        abort(403) # Повертаємо 403 для не-JSON запитів
+
+
 
 # --- 2. Налаштування логування ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
