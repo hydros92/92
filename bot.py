@@ -1,4 +1,6 @@
 import sqlite3
+import os
+import telebot
 from telebot import types
 import logging
 from datetime import datetime, timedelta
@@ -6,6 +8,7 @@ import re
 import json
 import requests
 from dotenv import load_dotenv
+from flask import Flask, request
 import time
 
 # Імпортуємо Base та User з users.py
@@ -15,26 +18,13 @@ from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text # Імпортуємо text для виконання RAW SQL
 
-from flask import Flask, request
-import telebot
-import os
-from dotenv import load_dotenv
-
-app = Flask(__name__)
-
 # Завантажуємо змінні середовища на самому початку
 load_dotenv()
 
 # --- 1. Конфігурація Бота (Змінні середовища) ---
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU')
-ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641'))
-
-# Важливо: WEBHOOK_URL повинен бути повним URL вашого додатка на Heroku
-# Замініть 'telegram-ad-bot-2025' на актуальне ім'я вашого додатку Heroku, якщо воно відрізняється
-WEBHOOK_URL = f"https://telegram-ad-bot-2025.herokuapp.com/webhook/{TOKEN}"
-
-
-bot = telebot.TeleBot(TOKEN)
+# Важливо: TOKEN та інші змінні повинні бути визначені ДО ініціалізації bot та app
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # ЗАМІНІТЬ ЦЕЙ ТОКЕН НА ВАШ АКТУАЛЬНИЙ!
+ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641')) # ЗАМІНІТЬ НА ВАШ CHAT_ID АДМІНІСТРАТОРА!
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ НА ID ВАШОГО КАНАЛУ!
 MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') # ЗАМІНІТЬ НА НОМЕР КАРТКИ!
 
@@ -56,9 +46,9 @@ logger = logging.getLogger(__name__)
 # --- 3. Конфігурація Webhook та Ініціалізація Бота/Flask ---
 # Важливо: змінні повинні бути визначені послідовно, з урахуванням залежностей.
 HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
-WEBHOOK_PATH = f"/webhook/{TOKEN}" # Moved after TOKEN definition
-HEROKU_APP_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com" # HEROKU_APP_NAME використовується тут
-WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH # HEROKU_APP_URL та WEBHOOK_PATH використовуються тут
+WEBHOOK_PATH = f"/webhook/{TOKEN}" # Визначення WEBHOOK_PATH після TOKEN
+HEROKU_APP_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com"
+WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH
 
 # Ініціалізація Flask для вебхуків (має бути після імпорту Flask)
 app = Flask(__name__)
@@ -66,59 +56,6 @@ app = Flask(__name__)
 # Ініціалізація бота (має бути після визначення TOKEN)
 bot = telebot.TeleBot(TOKEN)
 
-# --- 4. Ініціалізація Бази Даних (DB) ---
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
-if DATABASE_URL.startswith("postgres://"):
-    # Перетворюємо URL для SQLAlchemy, якщо це Heroku PostgreSQL
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
-
-def init_db():
-    try:
-
-        inspector = inspect(engine)
-        columns = [col["name"] for col in inspector.get_columns("users")]
-        if "user_status" not in columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE users ADD COLUMN user_status TEXT DEFAULT 'active'"))
-                logging.info("Колонка 'user_status' додана до таблиці 'users'.")
-    except Exception as e:
-        logging.error(f"Помилка при перевірці/додаванні колонки 'user_status': {e}")
-
-    # Інші ініціалізаційні команди, якщо є
-    Base.metadata.create_all(engine)
-    logging.info("База даних ініціалізована або вже існує.")
-
-# --- Код, який виконується при запуску додатка (НЕ в if __name__ == '__main__':) ---
-# Цей код буде виконаний Gunicorn'ом при запуску кожного робочого процесу.
-# Для уникнення "Too Many Requests", ми додамо обробку винятків і паузу.
-
-# Викликаємо ініціалізацію БД
-init_db()
-
-# Логіка встановлення вебхука:
-try:
-    logger.info("Видалення попереднього вебхука...")
-    bot.remove_webhook()
-    time.sleep(0.5) # Невелика затримка, щоб уникнути rate limiting
-
-    logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}")
-    bot.set_webhook(url=WEBHOOK_URL)
-    logger.info("Вебхук успішно встановлено.")
-except telebot.apihelper.ApiTelegramException as e:
-    if e.error_code == 429:
-        logger.warning(f"Отримано 'Too Many Requests' при встановленні вебхука. Це очікувано, якщо працює кілька Gunicorn-воркерів: {e}")
-        # Якщо ви впевнені, що перший воркер вже встановив його, можна проігнорувати для наступних
-    else:
-        logger.error(f"Помилка Telegram API при встановленні вебхука: {e}")
-except Exception as e:
-    logger.error(f"Неочікувана помилка при встановленні вебхука: {e}")
-
-logger.info("Бот запускається...")
-
-# --- Webhook обробник для Flask (далі по файлу, як у вас є) --
 
 # ===================
 # 📦 Конфігурація Бази Даних (SQLAlchemy)
@@ -487,20 +424,6 @@ main_menu_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
 main_menu_markup.add(types.KeyboardButton("🔥 Продати товар"), types.KeyboardButton("🛒 Мої товари"))
 main_menu_markup.add(types.KeyboardButton("❓ Допомога"), types.KeyboardButton("🤖 Запитати AI"))
 main_menu_markup.add(types.KeyboardButton("🎁 Персональна пропозиція"), types.KeyboardButton("👨‍💻 Зв'язатися з адміном"))
-
-
-# Цей маршрут приймає POST-запити від Telegram на URL вебхука
-@app.route(f"/webhook/{TOKEN}", methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '', 200 # Важливо: Telegram очікує 200 OK
-    else:
-        # Якщо запит не в форматі JSON, повертаємо 403 Forbidden
-        return 'Bad Request', 403
-
 
 
 # --- 9. Обробники команд ---
@@ -1724,12 +1647,12 @@ def handle_product_moderation_callbacks(call):
 
             # Публікація в каналі
             channel_text = (
-                f"🔥 *НОВИЙ ТОВАР!* 🔥\\n\\n"
-                f"📝 *Назва:* {product_name}\\n"
-                f"📄 *Опис:* {description}\\n"
-                f"💰 *Ціна:* {price} UAH\\n"
-                f"📍 *Геолокація:* {'Присутня' if geolocation else 'Відсутня'}\\n\\n"
-                f"🆔 *ID товару:* #{product_id}\\n\n"
+                f"🔥 *НОВИЙ ТОВАР!* 🔥\n\n" # Виправив подвійні слеші
+                f"📝 *Назва:* {product_name}\n"
+                f"📄 *Опис:* {description}\n"
+                f"💰 *Ціна:* {price} UAH\n"
+                f"📍 *Геолокація:* {'Присутня' if geolocation else 'Відсутня'}\n\n"
+                f"🆔 *ID товару:* #{product_id}\n\n"
                 f"📩 *Для зв'язку з продавцем:* @{bot.get_chat(seller_chat_id).username or 'користувач'}"
             )
             
@@ -1927,29 +1850,19 @@ logger.info("Видалення попереднього вебхука...")
 bot.remove_webhook() # Видаляємо попередній вебхук
 time.sleep(0.1) # Невелика затримка
 
-# ... (ваш існуючий код запуску бота, як було змінено раніше) ...
-logger.info("Запуск ініціалізації БД...")
-init_db()
-
-logger.info("Видалення попереднього вебхука...")
-bot.remove_webhook()
-time.sleep(0.1)
-
-logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}")
-bot.set_webhook(url=WEBHOOK_URL) # Переконайтесь, що тут використовується WEBHOOK_URL, а не WEBHOOK_PATH
+logger.info(f"Встановлення вебхука на: {WEBHOOK_URL}") # <<-- Тепер WEBHOOK_URL має бути визначений
+bot.set_webhook(url=WEBHOOK_URL)
 
 logger.info("Бот запускається...")
 
-# Кінець файлу. Gunicorn тепер знає, що 'app' це ваш Flask-додаток.
-# НІЯКИХ app.run() тут не повинно бути.
-# ЖОДНОГО if __name__ == '__main__': БЛОКУ ТУТ НЕ ПОВИННО БУТИ НІДЕ У ФАЙЛІ.
-
+# --- ОБРОБНИК ВЕБХУКА ДЛЯ FLASK ---
+# Цей маршрут приймає POST-запити від Telegram на URL вебхука
+# ПЕРЕКОНАЙТЕСЯ, ЩО ЦЕЙ БЛОК ПРИСУТНІЙ ЛИШЕ ОДИН РАЗ У ФАЙЛІ!
 @app.route(WEBHOOK_PATH, methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
-        return '', 200
-    return 'Unsupported Media Type', 415
-
+        return '', 200 # Важливо: Telegram очікує 200 OK
+    return 'Unsupported Media Type', 415 # Повертаємо 415, якщо не JSON
