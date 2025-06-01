@@ -1,7 +1,4 @@
-
 import sqlite3
-import os
-import telebot
 from telebot import types
 import logging
 from datetime import datetime, timedelta
@@ -9,7 +6,6 @@ import re
 import json
 import requests
 from dotenv import load_dotenv
-from flask import Flask, request
 import time
 
 # Імпортуємо Base та User з users.py
@@ -21,18 +17,20 @@ from sqlalchemy import text # Імпортуємо text для виконанн�
 
 from flask import Flask, request
 import telebot
-
-app = Flask(__name__)
-bot = telebot.TeleBot(TOKEN)
-
-WEBHOOK_PATH = f"/webhook/{TOKEN}"  # <- важливо
+import os
+from dotenv import load_dotenv
 
 # Завантажуємо змінні середовища на самому початку
 load_dotenv()
 
 # --- 1. Конфігурація Бота (Змінні середовища) ---
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # ЗАМІНІТЬ ЦЕЙ ТОКЕН НА ВАШ АКТУАЛЬНИЙ!
-ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641')) # ЗАМІНІТЬ НА ВАШ CHAT_ID АДМІНІСТРАТОРА!
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU') # Define TOKEN first
+ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID', '8184456641'))
+
+app = Flask(__name__)
+bot = telebot.TeleBot(TOKEN) # Now TOKEN is defined when used
+WEBHOOK_PATH = f"/webhook/{TOKEN}"
+
 CHANNEL_ID = int(os.getenv('CHANNEL_ID', '-1002535586055')) # ЗАМІНІТЬ НА ID ВАШОГО КАНАЛУ!
 MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER', '4441 1111 5302 1484') # ЗАМІНІТЬ НА НОМЕР КАРТКИ!
 
@@ -54,10 +52,9 @@ logger = logging.getLogger(__name__)
 # --- 3. Конфігурація Webhook та Ініціалізація Бота/Flask ---
 # Важливо: змінні повинні бути визначені послідовно, з урахуванням залежностей.
 HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
-WEBHOOK_PATH = f"/webhook/{TOKEN}"
+WEBHOOK_PATH = f"/webhook/{TOKEN}" # Moved after TOKEN definition
 HEROKU_APP_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com" # HEROKU_APP_NAME використовується тут
 WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH # HEROKU_APP_URL та WEBHOOK_PATH використовуються тут
-WEBHOOK_URL_PATH = f"/webhook/{TOKEN}"
 
 # Ініціалізація Flask для вебхуків (має бути після імпорту Flask)
 app = Flask(__name__)
@@ -118,16 +115,6 @@ except Exception as e:
 logger.info("Бот запускається...")
 
 # --- Webhook обробник для Flask (далі по файлу, як у вас є) --
-
-# Ініціалізація Flask для вебхуків (має бути після імпорту Flask)
-app = Flask(__name__)
-
-# Ініціалізація бота (має бути після визначення TOKEN)
-bot = telebot.TeleBot(TOKEN)
-
-# --- 4. Ініціалізація Бази Даних (DB) ---
-
-
 
 # ===================
 # 📦 Конфігурація Бази Даних (SQLAlchemy)
