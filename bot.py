@@ -1933,3 +1933,13 @@ logger.info("Бот запускається...")
 # Кінець файлу. Gunicorn тепер знає, що 'app' це ваш Flask-додаток.
 # НІЯКИХ app.run() тут не повинно бути.
 # ЖОДНОГО if __name__ == '__main__': БЛОКУ ТУТ НЕ ПОВИННО БУТИ НІДЕ У ФАЙЛІ.
+
+@app.route(WEBHOOK_PATH, methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return '', 200
+    else:
+        return 'Unsupported Media Type', 415
