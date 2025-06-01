@@ -1903,17 +1903,6 @@ def back_to_admin_panel(call):
                           reply_markup=markup, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-# --- Webhook обробник для Flask ---
-@app.route(WEBHOOK_URL_PATH, methods=['POST'])
-def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '!', 200
-    else:
-        # Це для перевірки, що сервер працює, коли ви відкриваєте URL в браузері
-        return '<h1>Hi, this is your Telegram bot!</h1>', 200
 
 # --- КОД ЗАПУСКУ БОТА ---
 # Цей код буде виконаний автоматично Gunicorn'ом при запуску додатка.
