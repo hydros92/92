@@ -1739,3 +1739,9 @@ def create_app():
 
 # Глобальні змінні для доступу до app та bot
 app, bot = create_app()
+
+if __name__ == "__main__":
+    app = create_app()
+else:
+    app = create_app()
+
