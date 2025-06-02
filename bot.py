@@ -413,10 +413,15 @@ def create_app():
     _heroku_app_url = f"https://{_heroku_app_name}.herokuapp.com"
     _webhook_url = _heroku_app_url + _webhook_path # Використовуємо локальну змінну
 
+    # --- ТЕСТОВИЙ МАРШРУТ ---
+    @_app.route('/')
+    def hello_world():
+        return 'Hello, world! Bot is running.'
+
     # --- Обробники команд та повідомлень (Тепер всередині create_app) ---
 
     @_bot.message_handler(commands=['start'])
-    @error_handler # Без аргументів
+    @error_handler
     def send_welcome(message):
         chat_id = message.chat.id
         if is_user_blocked(chat_id):
@@ -443,7 +448,7 @@ def create_app():
         _bot.send_message(chat_id, welcome_text, reply_markup=main_menu_markup, parse_mode='Markdown')
 
     @_bot.message_handler(commands=['admin'])
-    @error_handler # Без аргументів
+    @error_handler
     def admin_panel(message):
         if message.chat.id != ADMIN_CHAT_ID:
             _bot.send_message(message.chat.id, "❌ У вас немає прав доступу.")
@@ -462,7 +467,7 @@ def create_app():
         _bot.send_message(message.chat.id, "🔧 *Адмін-панель*", reply_markup=markup, parse_mode='Markdown')
 
     @_bot.message_handler(func=lambda message: message.text == "🤖 Запитати AI")
-    @error_handler # Без аргументів
+    @error_handler
     def ask_ai_command(message):
         if is_user_blocked(message.chat.id):
             _bot.send_message(message.chat.id, "❌ Ви заблоковані і не можете використовувати цю функцію.")
@@ -473,14 +478,14 @@ def create_app():
         _bot.send_message(message.chat.id, "Привіт! Я ваш AI помічник. Задайте мені будь-яке питання про товари, продажі, або просто поспілкуйтесь! Для виходу натисніть кнопку.", reply_markup=markup)
 
     @_bot.message_handler(func=lambda message: message.text == "❌ Вийти з AI чату")
-    @error_handler # Без аргументів
+    @error_handler
     def stop_ai_command(message):
         set_user_status(message.chat.id, 'idle')
         _bot.send_message(message.chat.id, "Ви вийшли з режиму AI-чату. Чим ще можу допомогти?",
                          reply_markup=main_menu_markup)
 
     @_bot.message_handler(func=lambda message: message.text == "👨‍💻 Зв'язатися з адміном")
-    @error_handler # Без аргументів
+    @error_handler
     def chat_with_human_command(message):
         if is_user_blocked(message.chat.id):
             _bot.send_message(message.chat.id, "❌ Ви заблоковані і не можете використовувати цю функцію.")
@@ -517,7 +522,7 @@ def create_app():
         _bot.send_message(ADMIN_CHAT_ID, "Натисніть 'Прийняти запит', щоб почати відповідати користувачу.", reply_markup=markup)
 
     @_bot.message_handler(func=lambda message: message.text == "❌ Завершити чат з адміном")
-    @error_handler # Без аргументів
+    @error_handler
     def stop_human_chat_command(message):
         if get_user_current_status(message.chat.id) == 'waiting_human_operator':
             set_user_status(message.chat.id, 'idle')
@@ -528,7 +533,7 @@ def create_app():
             _bot.send_message(message.chat.id, "Ви зараз не перебуваєте в чаті з оператором.")
 
     @_bot.callback_query_handler(func=lambda call: call.data.startswith('accept_human_chat_'))
-    @error_handler # Без аргументів
+    @error_handler
     def accept_human_chat_callback(call):
         if call.message.chat.id != ADMIN_CHAT_ID:
             _bot.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -548,7 +553,7 @@ def create_app():
 
 
     @_bot.message_handler(func=lambda message: message.text == "🎁 Персональна пропозиція")
-    @error_handler # Без аргументів
+    @error_handler
     def personal_offer_command(message):
         if is_user_blocked(message.chat.id):
             _bot.send_message(message.chat.id, "❌ Ви заблоковані і не можете використовувати цю функцію.")
@@ -559,7 +564,7 @@ def create_app():
         _bot.send_message(message.chat.id, "Будь ласка, детально опишіть ваше ексклюзивне замовлення або персональну пропозицію. Що ви хочете отримати?", reply_markup=markup)
 
     @_bot.message_handler(func=lambda message: message.text == "❌ Скасувати пропозицію")
-    @error_handler # Без аргументів
+    @error_handler
     def cancel_personal_offer(message):
         set_user_status(message.chat.id, 'idle')
         _bot.send_message(message.chat.id, "Створення персональної пропозиції скасовано.", reply_markup=main_menu_markup)
@@ -574,7 +579,7 @@ def create_app():
     }
 
     @_bot.message_handler(func=lambda message: message.text == "🔥 Продати товар")
-    @error_handler # Без аргументів
+    @error_handler
     def start_add_product_flow(message):
         chat_id = message.chat.id
         session = Session()
@@ -610,7 +615,7 @@ def create_app():
         send_product_step_message(chat_id, _bot)
         log_statistics('start_add_product', chat_id)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_product_step_message(chat_id, bot_instance):
         user_session = get_user_session_data(chat_id)
         current_step_number = user_session.get('step_number', 1)
@@ -638,7 +643,7 @@ def create_app():
         
         bot_instance.send_message(chat_id, step_config['prompt'], parse_mode='Markdown', reply_markup=markup)
 
-    @error_handler # Без аргументів
+    @error_handler
     def process_product_step(message, bot_instance):
         chat_id = message.chat.id
         current_user_status = get_user_current_status(chat_id)
@@ -714,7 +719,7 @@ def create_app():
             else:
                 bot_instance.send_message(chat_id, "Опис занадто короткий (мінімум 10 символів) або занадто довгий (максимум 1000 символів). Напишіть детальніше або натисніть 'Пропустити'/'Далі':")
 
-    @error_handler # Без аргументів
+    @error_handler
     def go_to_next_step(chat_id, bot_instance):
         user_session = get_user_session_data(chat_id)
         current_step_number = user_session.get('step_number', 1)
@@ -739,7 +744,7 @@ def create_app():
             send_product_step_message(chat_id, bot_instance)
 
     @_bot.message_handler(content_types=['photo'], func=lambda message: get_user_current_status(message.chat.id) == 'adding_product_step_3')
-    @error_handler # Без аргументів
+    @error_handler
     def process_product_photo(message):
         chat_id = message.chat.id
         user_session = get_user_session_data(chat_id)
@@ -754,7 +759,7 @@ def create_app():
             _bot.send_message(chat_id, "Максимум 5 фото. Натисніть 'Далі' для продовження.")
 
     @_bot.message_handler(content_types=['location'], func=lambda message: get_user_current_status(message.chat.id) == 'adding_product_step_4')
-    @error_handler # Без аргументів
+    @error_handler
     def process_product_location(message):
         chat_id = message.chat.id
         user_session = get_user_session_data(chat_id)
@@ -770,7 +775,7 @@ def create_app():
         set_user_status(chat_id, 'adding_product_step_5')
         send_product_step_message(chat_id, _bot)
 
-    @error_handler # Без аргументів
+    @error_handler
     def confirm_and_send_for_moderation(chat_id, bot_instance):
         data = get_user_session_data(chat_id)['data']
         
@@ -802,7 +807,7 @@ def create_app():
         finally:
             session.close()
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_product_for_admin_review(product_id, data, seller_chat_id, seller_username, bot_instance):
         hashtags = generate_hashtags(data['description'])
         review_text = (
@@ -857,7 +862,7 @@ def create_app():
         return 'Unsupported Media Type', 415
 
     @_bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'location'])
-    @error_handler # Без аргументів
+    @error_handler
     def handle_messages(message):
         chat_id = message.chat.id
         user_text = message.text if message.content_type == 'text' else ""
@@ -994,7 +999,7 @@ def create_app():
             _bot.send_message(chat_id, "Я не зрозумів ваш запит. Спробуйте використати кнопки меню.")
 
     # --- Список товарів користувача ---
-    @error_handler # Без аргументів
+    @error_handler
     def send_my_products(message, bot_instance):
         chat_id = message.chat.id
         session = Session()
@@ -1050,7 +1055,7 @@ def create_app():
             bot_instance.send_message(chat_id, "📭 Ви ще не додавали жодних товарів.\n\nНатисніть '🔥 Продати товар' щоб створити своє перше оголошення!")
 
     # --- Допомога та Канал ---
-    @error_handler # Без аргументів
+    @error_handler
     def send_help_message(message, bot_instance):
         help_text = (
             "🆘 *Довідка*\n\n"
@@ -1067,7 +1072,7 @@ def create_app():
         )
         bot_instance.send_message(message.chat.id, help_text, parse_mode='Markdown', reply_markup=main_menu_markup)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_commission_info(message, bot_instance):
         commission_rate_percent = 10
         text = (
@@ -1080,7 +1085,7 @@ def create_app():
         )
         bot_instance.send_message(message.chat.id, text, parse_mode='Markdown', reply_markup=main_menu_markup)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_channel_link(message, bot_instance):
         chat_id = message.chat.id
         try:
@@ -1117,7 +1122,7 @@ def create_app():
 
     # --- Обробники Callback Query ---
     @_bot.callback_query_handler(func=lambda call: True)
-    @error_handler # Без аргументів
+    @error_handler
     def callback_inline(call):
         if call.data.startswith('admin_'):
             handle_admin_callbacks(call, _bot)
@@ -1132,7 +1137,7 @@ def create_app():
             _bot.answer_callback_query(call.id, "Невідома дія.")
 
     # --- Callbacks для Адмін-панелі ---
-    @error_handler # Без аргументів
+    @error_handler
     def handle_admin_callbacks(call, bot_instance):
         if call.message.chat.id != ADMIN_CHAT_ID:
             bot_instance.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -1160,7 +1165,7 @@ def create_app():
 
         bot_instance.answer_callback_query(call.id)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_admin_statistics(call, bot_instance):
         session = Session()
         try:
@@ -1201,7 +1206,7 @@ def create_app():
         bot_instance.edit_message_text(stats_text, call.message.chat.id, call.message.message_id,
                              parse_mode='Markdown', reply_markup=markup)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_users_list(call, bot_instance):
         session = Session()
         try:
@@ -1230,7 +1235,7 @@ def create_app():
                              parse_mode='Markdown', reply_markup=markup)
 
     @_bot.message_handler(func=lambda message: get_user_current_status(message.chat.id) == 'awaiting_user_for_block_unblock' and message.chat.id == ADMIN_CHAT_ID)
-    @error_handler # Без аргументів
+    @error_handler
     def process_user_for_block_unblock(message, bot_instance):
         admin_chat_id = message.chat.id
         target_identifier = message.text.strip()
@@ -1280,7 +1285,7 @@ def create_app():
             bot_instance.send_message(admin_chat_id, "Користувача не знайдено.")
             set_user_status(admin_chat_id, 'idle')
 
-    @error_handler # Без аргументів
+    @error_handler
     def handle_user_block_callbacks(call, bot_instance):
         admin_chat_id = call.message.chat.id
         data_parts = call.data.split('_')
@@ -1315,7 +1320,7 @@ def create_app():
                                       chat_id=admin_chat_id, message_id=call.message.message_id, parse_mode='Markdown')
         bot_instance.answer_callback_query(call.id)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_pending_products_for_moderation(call, bot_instance):
         session = Session()
         try:
@@ -1349,7 +1354,7 @@ def create_app():
         bot_instance.send_message(call.message.chat.id, "✅ Всі товари на модерації відправлено.", reply_markup=markup)
         bot_instance.answer_callback_query(call.id)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_admin_commissions_info(call, bot_instance):
         session = Session()
         try:
@@ -1388,7 +1393,7 @@ def create_app():
         bot_instance.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
         bot_instance.answer_callback_query(call.id)
 
-    @error_handler # Без аргументів
+    @error_handler
     def send_admin_ai_statistics(call, bot_instance):
         session = Session()
         try:
@@ -1431,7 +1436,7 @@ def create_app():
         bot_instance.answer_callback_query(call.id)
 
     # --- Керування FAQ в адмін-панелі ---
-    @error_handler # Без аргументів
+    @error_handler
     def send_admin_faq_menu(call, bot_instance):
         markup = types.InlineKeyboardMarkup(row_width=1)
         markup.add(
@@ -1446,7 +1451,7 @@ def create_app():
         bot_instance.answer_callback_query(call.id)
 
     @_bot.callback_query_handler(func=lambda call: call.data.startswith('admin_faq_'))
-    @error_handler # Без аргументів
+    @error_handler
     def handle_admin_faq_callbacks(call):
         if call.message.chat.id != ADMIN_CHAT_ID:
             _bot.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -1492,7 +1497,7 @@ def create_app():
 
 
     # --- Callbacks для модерації товару ---
-    @error_handler # Без аргументів
+    @error_handler
     def handle_product_moderation_callbacks(call, bot_instance):
         if call.message.chat.id != ADMIN_CHAT_ID:
             bot_instance.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -1689,7 +1694,7 @@ def create_app():
 
     # --- Повернення до адмін-панелі після колбеку ---
     @_bot.callback_query_handler(func=lambda call: call.data == "admin_panel_main")
-    @error_handler # Без аргументів
+    @error_handler
     def back_to_admin_panel(call):
         if call.message.chat.id != ADMIN_CHAT_ID:
             _bot.answer_callback_query(call.id, "❌ Доступ заборонено.")
