@@ -409,9 +409,13 @@ def create_app():
 
     # --- Конфігурація Webhook ---
     _heroku_app_name = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
-    _webhook_path = "/webhook" # Змінено на простий шлях
+    # Базовий шлях вебхука
+    _webhook_path_base = "/webhook" 
+    # Повний шлях вебхука, який Telegram буде використовувати (включає токен)
+    _webhook_path_full = f"{_webhook_path_base}/{TOKEN}" 
     _heroku_app_url = f"https://{_heroku_app_name}.herokuapp.com"
-    _webhook_url = _heroku_app_url + _webhook_path # Використовуємо локальну змінну
+    # URL, який ми встановимо для Telegram
+    _webhook_url = _heroku_app_url + _webhook_path_full 
 
     # --- ТЕСТОВИЙ МАРШРУТ ---
     @_app.route('/')
@@ -852,8 +856,13 @@ def create_app():
 
 
     # --- Обробники текстових повідомлень та кнопок меню ---
-    @_app.route(_webhook_path, methods=['POST']) # Використовуємо локальну змінну _webhook_path
-    def webhook():
+    # Маршрут Flask тепер приймає токен як змінну частину URL
+    @_app.route(f"{_webhook_path_base}/<received_token>", methods=['POST'])
+    def webhook(received_token):
+        # Перевіряємо, чи отриманий токен відповідає нашому TOKEN
+        if received_token != TOKEN:
+            abort(403) # Заборонено, якщо токен не збігається
+        
         if request.headers.get('content-type') == 'application/json':
             json_string = request.get_data().decode('utf-8')
             update = telebot.types.Update.de_json(json_string)
