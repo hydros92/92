@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -19,6 +19,10 @@ class User(Base):
     blocked_by = Column(Integer) # ID адміністратора, який заблокував
     blocked_at = Column(DateTime)
     user_status = Column(String, default='idle') # Додана колонка для статусу користувача
+    # Додана колонка для зберігання тимчасових даних сесії користувача (наприклад, для багатошагових форм)
+    # Зберігатиметься як JSON-рядок
+    user_session_data = Column(Text, default='{}')
 
     def __repr__(self):
         return f"<User(id={self.id}, chat_id={self.chat_id}, username='{self.username}')>"
+
