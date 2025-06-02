@@ -408,7 +408,9 @@ def create_app():
     _bot = telebot.TeleBot(TOKEN)
 
     # --- Конфігурація Webhook ---
-    _heroku_app_name = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
+   _heroku_app_name = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
+   _webhook_url = f"https://{_heroku_app_name}.herokuapp.com/{TOKEN}"
+
     # Базовий шлях вебхука
     _webhook_path_base = "" # Змінено на порожній рядок
     # Повний шлях вебхука, який Telegram буде використовувати (включає токен)
@@ -426,16 +428,14 @@ def create_app():
     # --- Обробники команд та повідомлень (Тепер всередині create_app) ---
 
     # Маршрут Flask тепер точно відповідає URL вебхука Telegram
-    @_app.route(f"/{TOKEN}", methods=['POST']) # Змінено на точний шлях з токеном
-    def webhook():
-        logger.info("Webhook received!") # Логування для діагностики
-        
-        if request.headers.get('content-type') == 'application/json':
-            json_string = request.get_data().decode('utf-8')
-            update = telebot.types.Update.de_json(json_string)
-            _bot.process_new_updates([update])
-            return '', 200
-        return 'Unsupported Media Type', 415
+    @app.route(f"/{TOKEN}", methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        update = telebot.types.Update.de_json(request.get_data().decode("utf-8"))
+        bot.process_new_updates([update])
+        return '', 200
+    return 'Unsupported Media Type', 415
+
 
     @_bot.message_handler(commands=['start'])
     @error_handler
