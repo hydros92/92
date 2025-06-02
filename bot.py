@@ -416,7 +416,7 @@ def create_app():
 
     # --- Конфігурація Webhook ---
     HEROKU_APP_NAME = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
-    WEBHOOK_PATH = f"/webhook/{TOKEN}"
+    WEBHOOK_URL_PATH = f"/webhook/{TOKEN}"
     HEROKU_APP_URL = f"https://{HEROKU_APP_NAME}.herokuapp.com"
     WEBHOOK_URL = HEROKU_APP_URL + WEBHOOK_PATH
 
