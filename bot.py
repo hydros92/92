@@ -410,9 +410,9 @@ def create_app():
     # --- Конфігурація Webhook ---
     _heroku_app_name = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
     # Базовий шлях вебхука
-    _webhook_path_base = "/webhook" 
+    _webhook_path_base = "/" # Змінено на кореневий шлях для діагностики
     # Повний шлях вебхука, який Telegram буде використовувати (включає токен)
-    _webhook_path_full = f"{_webhook_path_base}/{TOKEN}" 
+    _webhook_path_full = f"{_webhook_path_base}{TOKEN}" # Тепер це буде /{TOKEN}
     _heroku_app_url = f"https://{_heroku_app_name}.herokuapp.com"
     # URL, який ми встановимо для Telegram
     _webhook_url = _heroku_app_url + _webhook_path_full 
@@ -422,7 +422,24 @@ def create_app():
     def hello_world():
         return 'Hello, world! Bot is running.'
 
-    # --- Обробники команд та повідомлень (Тепер всередині create_app) ---
+    # --- Обробники текстових повідомлень та кнопок меню ---
+    # Маршрут Flask тепер приймає токен як змінну частину URL
+    # Тимчасово встановлюємо маршрут на корінь для діагностики 404
+    @_app.route(f"/", methods=['POST']) # Змінено на корінь
+    def webhook():
+        logger.info("Webhook received on root path!") # Логування для діагностики
+        
+        # Перевіряємо, чи отриманий токен відповідає нашому TOKEN
+        # Ця перевірка тепер не потрібна, оскільки токен не в URL
+        # if received_token != TOKEN:
+        #     abort(403) # Заборонено, якщо токен не збігається
+        
+        if request.headers.get('content-type') == 'application/json':
+            json_string = request.get_data().decode('utf-8')
+            update = telebot.types.Update.de_json(json_string)
+            _bot.process_new_updates([update])
+            return '', 200
+        return 'Unsupported Media Type', 415
 
     @_bot.message_handler(commands=['start'])
     @error_handler
@@ -821,7 +838,7 @@ def create_app():
             f"💰 Ціна: {data['price']}\n"
             f"📄 Опис: {data['description'][:500]}...\n"
             f"📸 Фото: {len(data['photos'])} шт.\n"
-            f"📍 Геолокація: {'Так' if data['geolocation'] else 'Ні'}\n"
+            f"📍 Геолокація: {'Присутня' if data['geolocation'] else 'Відсутня'}\n"
             f"🏷️ Хештеги: {hashtags}\n\n"
             f"👤 Продавець: [{'@' + seller_username if seller_username else 'Користувач'}](tg://user?id={seller_chat_id})"
         )
@@ -854,280 +871,6 @@ def create_app():
         except Exception as e:
             logger.error(f"Помилка при відправці товару {product_id} адміністратору: {e}", exc_info=True)
 
-
-    # --- Обробники текстових повідомлень та кнопок меню ---
-    # Маршрут Flask тепер приймає токен як змінну частину URL
-    @_app.route(f"{_webhook_path_base}/<received_token>", methods=['POST'])
-    def webhook(received_token):
-        # Перевіряємо, чи отриманий токен відповідає нашому TOKEN
-        if received_token != TOKEN:
-            abort(403) # Заборонено, якщо токен не збігається
-        
-        if request.headers.get('content-type') == 'application/json':
-            json_string = request.get_data().decode('utf-8')
-            update = telebot.types.Update.de_json(json_string)
-            _bot.process_new_updates([update])
-            return '', 200
-        return 'Unsupported Media Type', 415
-
-    @_bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'location'])
-    @error_handler
-    def handle_messages(message):
-        chat_id = message.chat.id
-        user_text = message.text if message.content_type == 'text' else ""
-        current_user_status = get_user_current_status(chat_id)
-
-        if is_user_blocked(chat_id):
-            _bot.send_message(chat_id, "❌ Ваш акаунт заблоковано.")
-            return
-        
-        save_user(message)
-
-        if message.content_type == 'photo' and current_user_status == 'adding_product_step_3':
-            process_product_photo(message)
-            return
-        if message.content_type == 'location' and current_user_status == 'adding_product_step_4':
-            process_product_location(message)
-            return
-
-        if current_user_status.startswith('adding_product_step_') or current_user_status == 'confirm_product':
-            process_product_step(message, _bot)
-            return
-
-        if str(chat_id) == str(ADMIN_CHAT_ID) and current_user_status.startswith('chatting_with_user_'):
-            target_user_id = int(current_user_status.split('_')[3])
-            try:
-                _bot.send_message(target_user_id, f"Відповідь адміністратора: {user_text}")
-                _bot.send_message(chat_id, "Повідомлення відправлено користувачу.")
-            except Exception as e:
-                logger.error(f"Помилка пересилання повідомлення від адміна до користувача {target_user_id}: {e}")
-                _bot.send_message(chat_id, "Не вдалося відправити повідомлення користувачу. Можливо, він заблокував бота.")
-            return
-
-        if current_user_status == 'awaiting_personal_offer_details':
-            if user_text == "❌ Скасувати пропозицію":
-                set_user_status(chat_id, 'idle')
-                _bot.send_message(chat_id, "Створення персональної пропозиції скасовано.", reply_markup=main_menu_markup)
-                return
-            
-            user = message.from_user
-            username_info = f"@{user.username}" if user.username else "без нікнейму"
-            user_link = f"tg://user?id={user.id}"
-            
-            admin_offer_text = (
-                f"🎁 *НОВА ПЕРСОНАЛЬНА ПРОПОЗИЦІЯ!* 🎁\n\n"
-                f"Від користувача: [{user.first_name} {user.last_name}]({user_link}) ({username_info})\n"
-                f"ID: `{user.id}`\n\n"
-                f"**Деталі пропозиції:**\n{user_text}\n\n"
-                f"Будь ласка, зв'яжіться з користувачем для обговорення."
-            )
-            _bot.send_message(ADMIN_CHAT_ID, admin_offer_text, parse_mode='Markdown')
-            _bot.send_message(chat_id, "✅ Вашу персональну пропозицію надіслано адміністратору. Очікуйте зв'язку!", reply_markup=main_menu_markup)
-            set_user_status(chat_id, 'idle')
-            return
-
-        if current_user_status == 'ai_chat':
-            if user_text == "❌ Вийти з AI чату":
-                stop_ai_command(message)
-            else:
-                faq_answer = get_faq_answer(user_text)
-                if faq_answer:
-                    _bot.send_message(chat_id, f"📚 *Ось що я знайшов у нашій базі знань:*\n\n{faq_answer}", parse_mode='Markdown')
-                    save_conversation(chat_id, user_text, 'user')
-                    save_conversation(chat_id, faq_answer, 'ai')
-                else:
-                    save_conversation(chat_id, user_text, 'user')
-                    ai_reply = get_grok_response(user_text, get_conversation_history(chat_id, limit=10))
-                    save_conversation(chat_id, ai_reply, 'ai')
-                    _bot.send_message(chat_id, f"🤖 {ai_reply}")
-            return
-
-        if chat_id == ADMIN_CHAT_ID:
-            if current_user_status == 'awaiting_faq_question':
-                admin_session_data = get_user_session_data(ADMIN_CHAT_ID)
-                admin_session_data['faq_question'] = user_text
-                set_user_session_data(ADMIN_CHAT_ID, admin_session_data)
-
-                set_user_status(ADMIN_CHAT_ID, 'awaiting_faq_answer')
-                _bot.send_message(ADMIN_CHAT_ID, "Тепер введіть відповідь на це питання:")
-                return
-            elif current_user_status == 'awaiting_faq_answer':
-                admin_session_data = get_user_session_data(ADMIN_CHAT_ID)
-                question = admin_session_data.get('faq_question')
-                answer = user_text
-                
-                if add_faq_entry(question, answer):
-                    _bot.send_message(ADMIN_CHAT_ID, "✅ Питання та відповідь успішно додано до FAQ.")
-                else:
-                    _bot.send_message(ADMIN_CHAT_ID, "❌ Помилка: Таке питання вже існує в FAQ.")
-                
-                set_user_status(ADMIN_CHAT_ID, 'idle')
-                clear_user_session_data(ADMIN_CHAT_ID)
-                send_admin_faq_menu_after_action(message, _bot)
-                return
-            elif current_user_status == 'awaiting_faq_delete_id':
-                try:
-                    faq_id = int(user_text)
-                    if delete_faq_entry(faq_id):
-                        _bot.send_message(ADMIN_CHAT_ID, f"✅ Питання з ID {faq_id} успішно видалено з FAQ.")
-                    else:
-                        _bot.send_message(ADMIN_CHAT_ID, f"❌ Помилка: Питання з ID {faq_id} не знайдено.")
-                except ValueError:
-                    _bot.send_message(ADMIN_CHAT_ID, "Будь ласка, введіть дійсний числовий ID.")
-                
-                set_user_status(ADMIN_CHAT_ID, 'idle')
-                send_admin_faq_menu_after_action(message, _bot)
-                return
-            elif current_user_status == 'awaiting_user_for_block_unblock':
-                process_user_for_block_unblock(message, _bot)
-                return
-
-        if user_text == "🔥 Продати товар":
-            start_add_product_flow(message)
-        elif user_text == "🛒 Мої товари":
-            send_my_products(message, _bot)
-        elif user_text == "❓ Допомога":
-            send_help_message(message, _bot)
-        elif user_text == "💰 Комісія":
-            send_commission_info(message, _bot)
-        elif user_text == "📺 Наш канал":
-            send_channel_link(message, _bot)
-        elif user_text == "🤖 Запитати AI":
-            ask_ai_command(message)
-        elif user_text == "👨‍💻 Зв'язатися з адміном":
-            chat_with_human_command(message)
-        elif user_text == "🎁 Персональна пропозиція":
-            personal_offer_command(message)
-        elif message.content_type == 'text':
-            _bot.send_message(chat_id, "Я не зрозумів ваш запит. Будь ласка, скористайтеся кнопками меню або натисніть '🤖 Запитати AI', щоб поспілкуватися з моїм штучним інтелектом.", reply_markup=main_menu_markup)
-        elif message.content_type == 'photo':
-            _bot.send_message(chat_id, "Я отримав ваше фото, але не знаю, що з ним робити поза процесом додавання товару. 🤔")
-        elif message.content_type == 'location':
-            _bot.send_message(chat_id, f"Я бачу вашу геоточку: {message.location.latitude}, {message.location.longitude}. Як я можу її використати?")
-        else:
-            _bot.send_message(chat_id, "Я не зрозумів ваш запит. Спробуйте використати кнопки меню.")
-
-    # --- Список товарів користувача ---
-    @error_handler
-    def send_my_products(message, bot_instance):
-        chat_id = message.chat.id
-        session = Session()
-        try:
-            user_products = []
-            logger.warning("Отримання товарів користувача тимчасово відключено (немає моделі Product).")
-
-        except Exception as e:
-            logger.error(f"Помилка при отриманні товарів для користувача {chat_id}: {e}")
-            bot_instance.send_message(chat_id, "❌ Не вдалося отримати список ваших товарів.")
-            return
-        finally:
-            session.close()
-
-        if user_products:
-            response_parts = ["📋 *Ваші товари:*\n\n"]
-            for i, product in enumerate(user_products, 1):
-                status_emoji = {
-                    'pending': '⏳',
-                    'approved': '✅',
-                    'rejected': '❌',
-                    'sold': '💰',
-                    'expired': '🗑️'
-                }
-                status_ukr = {
-                    'pending': 'на розгляді',
-                    'approved': 'опубліковано',
-                    'rejected': 'відхилено',
-                    'sold': 'продано',
-                    'expired': 'термін дії закінчився'
-                }.get(product['status'], product['status'])
-
-                product_info = (
-                    f"{i}. {status_emoji.get(product.status, '❓')} *{product.product_name}*\n"
-                    f"   💰 {product.price}\n"
-                    f"   📅 {product.created_at.strftime('%d.%m.%Y %H:%M')}\n"
-                    f"   📊 Статус: {status_ukr}\n"
-                )
-                
-                if product.status == 'approved' and product.channel_message_id:
-                    product_info += f"   🔗 [Переглянути в каналі](https://t.me/c/{str(CHANNEL_ID)[4:]}/{product.channel_message_id})\n"
-                
-                response_parts.append(product_info + "\n")
-            
-            full_response = "".join(response_parts)
-            if len(full_response) > 4096:
-                for i in range(0, len(full_response), 4000):
-                    bot_instance.send_message(chat_id, full_response[i:i+4000], parse_mode='Markdown', disable_web_page_preview=True)
-            else:
-                bot_instance.send_message(chat_id, full_response, parse_mode='Markdown', disable_web_page_preview=True)
-
-        else:
-            bot_instance.send_message(chat_id, "📭 Ви ще не додавали жодних товарів.\n\nНатисніть '🔥 Продати товар' щоб створити своє перше оголошення!")
-
-    # --- Допомога та Канал ---
-    @error_handler
-    def send_help_message(message, bot_instance):
-        help_text = (
-            "🆘 *Довідка*\n\n"
-            "🤖 Я ваш AI-помічник для купівлі та продажу. Ви можете:\n"
-            "🔥 *Продати товар* - створити оголошення.\n"
-            "🛒 *Мої товари* - переглянути ваші активні та продані товари.\n"
-            "💰 *Комісія* - інформація про комісійні збори.\n"
-            "📺 *Наш канал* - переглянути всі актуальні пропозиції.\n"
-            "🤖 *Запитати AI* - поспілкуватися з Grok AI.\n"
-            "🎁 *Персональна пропозиція* - для замовлення ексклюзивного товару або послуги.\n"
-            "👨‍💻 *Зв'язатися з адміном* - якщо AI не може допомогти, або у вас є складні питання.\n\n"
-            "🗣️ *Спілкування:* Просто пишіть мені ваші запитання або пропозиції, і мій вбудований AI спробує вам допомогти!\n\n"
-            "Якщо виникли технічні проблеми, зверніться до адміністратора."
-        )
-        bot_instance.send_message(message.chat.id, help_text, parse_mode='Markdown', reply_markup=main_menu_markup)
-
-    @error_handler
-    def send_commission_info(message, bot_instance):
-        commission_rate_percent = 10
-        text = (
-            f"💰 *Інформація про комісію*\n\n"
-            f"За успішний продаж товару через нашого бота стягується комісія у розмірі **{commission_rate_percent}%** від кінцевої ціни продажу.\n\n"
-            f"Після того, як ви позначите товар як 'Продано', система розрахує суму комісії, і ви отримаєте інструкції щодо її сплати.\n\n"
-            f"Реквізити для сплати комісії (Monobank):\n`{MONOBANK_CARD_NUMBER}`\n\n"
-            f"Будь ласка, сплачуйте комісію вчасно, щоб уникнути обмежень на використання бота.\n\n"
-            f"Детальніше про ваші поточні нарахування та сплати можна буде дізнатися в розділі 'Мої товари'."
-        )
-        bot_instance.send_message(message.chat.id, text, parse_mode='Markdown', reply_markup=main_menu_markup)
-
-    @error_handler
-    def send_channel_link(message, bot_instance):
-        chat_id = message.chat.id
-        try:
-            chat_info = bot_instance.get_chat(CHANNEL_ID)
-            channel_link = ""
-            if chat_info.invite_link:
-                channel_link = chat_info.invite_link
-            elif chat_info.username:
-                channel_link = f"https://t.me/{chat_info.username}"
-            else:
-                try:
-                    invite_link_obj = bot_instance.create_chat_invite_link(CHANNEL_ID, member_limit=1)
-                    channel_link = invite_link_obj.invite_link
-                    logger.info(f"Згенеровано нове посилання на запрошення для каналу: {channel_link}")
-                except telebot.apihelper.ApiTelegramException as e:
-                    logger.warning(f"Не вдалося створити посилання на запрошення для каналу {CHANNEL_ID}: {e}")
-                    channel_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}"
-
-            if not channel_link:
-                 raise Exception("Не вдалося сформувати посилання на канал.")
-
-            invite_text = (
-                f"📺 *Наш канал з оголошеннями*\n\n"
-                f"Приєднуйтесь до нашого каналу, щоб не пропустити нові товари!\n\n"
-                f"👉 [Перейти до каналу]({channel_link})\n\n"
-                f"💡 У каналі публікуються тільки перевірені оголошення"
-            )
-            bot_instance.send_message(chat_id, invite_text, parse_mode='Markdown', disable_web_page_preview=True)
-            log_statistics('channel_visit', chat_id)
-
-        except Exception as e:
-            logger.error(f"Помилка при отриманні або формуванні посилання на канал: {e}", exc_info=True)
-            bot_instance.send_message(chat_id, "❌ На жаль, посилання на канал тимчасово недоступне. Зверніться до адміністратора.")
 
     # --- Обробники Callback Query ---
     @_bot.callback_query_handler(func=lambda call: True)
