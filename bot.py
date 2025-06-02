@@ -412,8 +412,9 @@ def create_app():
     # Базовий шлях вебхука
     _webhook_path_base = "" # Змінено на порожній рядок
     # Повний шлях вебхука, який Telegram буде використовувати (включає токен)
-    _webhook_path_full = f"{_webhook_path_base}{TOKEN}" # Тепер це буде просто TOKEN, наприклад "8039977178:AAGS-GbH-lhljGGG6OgJ2iMU_ncB-JzeOvU"
-    _heroku_app_url = f"https://{_heroku_app_name}.herokuapp.com"
+    _webhook_path_full = "webhook"
+    _webhook_url = f"{_heroku_app_url}/{_webhook_path_full}"
+
     # URL, який ми встановимо для Telegram
     _webhook_url = f"{_heroku_app_url}/{_webhook_path_full}" # Формуємо повний URL з токеном у корені
 
@@ -1756,6 +1757,8 @@ def create_app():
 
     # Повертаємо екземпляри
     return _app, _bot
+
+return _app, _bot
 
 
 # --- Глобальна ініціалізація ---
