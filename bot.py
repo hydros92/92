@@ -1723,19 +1723,14 @@ def create_app():
                               reply_markup=markup, parse_mode='Markdown')
         _bot.answer_callback_query(call.id)
 
-    # Ініціалізація БД та вебхука при створенні додатку
-    logger.info("Запуск ініціалізації БД...")
-    init_db()
 
-    logger.info("Видалення попереднього вебхука...")
-    _bot.remove_webhook()
-    time.sleep(0.1)
 
-    logger.info(f"Встановлення вебхука на: {_webhook_url}")
-    _bot.set_webhook(url=_webhook_url)
-    logger.info("Бот запускається...")
 
-    return _app, _bot
+
+
+
+
+
 
 # Глобальні змінні для доступу до app та bot
 app, bot = create_app()
