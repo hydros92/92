@@ -1741,6 +1741,10 @@ def create_app():
 app, bot = create_app()
 
 if __name__ == "__main__":
+    from time import sleep
+    sleep(1)
+    _bot.remove_webhook()
+    _bot.set_webhook(url=_webhook_url)
     app = create_app()
 else:
     app = create_app()
