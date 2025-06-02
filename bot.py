@@ -409,7 +409,7 @@ def create_app():
 
     # --- Конфігурація Webhook ---
     _heroku_app_name = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
-    _webhook_path = f"/webhook/{TOKEN}" # Локальна змінна
+    _webhook_path = "/webhook" # Змінено на простий шлях
     _heroku_app_url = f"https://{_heroku_app_name}.herokuapp.com"
     _webhook_url = _heroku_app_url + _webhook_path # Використовуємо локальну змінну
 
