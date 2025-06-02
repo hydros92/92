@@ -1731,40 +1731,16 @@ def create_app():
 
 
 
-# bot.py (частина внизу файлу)
-
 def create_app():
     _app = Flask(__name__)
     _bot = telebot.TeleBot(TOKEN)
-
-    # Конфігурація Webhook
-    _heroku_app_name = os.getenv('HEROKU_APP_NAME', 'telegram-ad-bot-2025')
-    _webhook_url = f"https://{_heroku_app_name}.herokuapp.com/{TOKEN}"
-
-    @_app.route('/')
-    def hello_world():
-        return 'Hello, world! Bot is running.'
-
-    @_app.route(f"/{TOKEN}", methods=['POST'])
-    def webhook():
-        if request.headers.get('content-type') == 'application/json':
-            update = telebot.types.Update.de_json(request.get_data().decode("utf-8"))
-            _bot.process_new_updates([update])
-            return '', 200
-        return 'Unsupported Media Type', 415
-
-    # (тут всі message_handler-и, callback-и, тощо)
-
-    # Повертаємо екземпляри
-    return _app, _bot
-
-return _app, _bot
-
+    ...
+    return _app, _bot  # ✅ це повернення всередині функції
 
 # --- Глобальна ініціалізація ---
-app, bot = create_app()
+app, bot = create_app()  # ✅ правильно
 
-# БЕЗПЕЧНЕ встановлення вебхука після створення app та bot
+# Далі – ініціалізація БД та вебхука
 try:
     logger.info("Ініціалізація БД...")
     init_db()
