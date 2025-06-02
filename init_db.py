@@ -1,6 +1,6 @@
 import os
 from sqlalchemy import create_engine, text, inspect
-from models import Base  # заміни на свій модуль з ORM-моделями
+from users import Base # використовуємо users.py, де визначено Base
 
 from dotenv import load_dotenv
 
