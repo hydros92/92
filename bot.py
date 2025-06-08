@@ -32,6 +32,7 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+# Базова перевірка наявності основних змінних
 if not TOKEN:
     print("Помилка: TELEGRAM_BOT_TOKEN не встановлено у змінних оточення. Вихід.")
     exit(1)
@@ -180,7 +181,9 @@ def error_handler(func):
                     chat_id_to_notify = first_arg.message.chat.id
             
             try:
+                # Намагаємося надіслати помилку адміністратору
                 bot.send_message(ADMIN_CHAT_ID, f"🚨 Критична помилка в боті!\nФункція: {func.__name__}\nПомилка: {e}\nДивіться деталі в логах Render.")
+                # Намагаємося надіслати користувачу, якщо це не адмін
                 if chat_id_to_notify != ADMIN_CHAT_ID:
                     bot.send_message(chat_id_to_notify, "😔 Вибачте, сталася внутрішня помилка. Адміністратор вже сповіщений.")
             except Exception as e_notify:
@@ -239,7 +242,7 @@ def is_user_blocked(chat_id):
         return result and result['is_blocked']
     except Exception as e:
         logger.error(f"Помилка перевірки блокування для {chat_id}: {e}", exc_info=True)
-        return True
+        return True # Вважаємо заблокованим у разі помилки для безпеки
     finally:
         if conn:
             conn.close()
@@ -251,12 +254,12 @@ def set_user_block_status(admin_id, chat_id, status):
     if not conn: return False
     try:
         cur = conn.cursor()
-        if status:
+        if status: # Блокування
             cur.execute(pg_sql.SQL("""
                 UPDATE users SET is_blocked = TRUE, blocked_by = %s, blocked_at = CURRENT_TIMESTAMP
                 WHERE chat_id = %s;
             """), (admin_id, chat_id))
-        else:
+        else: # Розблокування
             cur.execute(pg_sql.SQL("""
                 UPDATE users SET is_blocked = FALSE, blocked_by = NULL, blocked_at = NULL
                 WHERE chat_id = %s;
@@ -447,7 +450,7 @@ cancel_button = types.KeyboardButton("❌ Скасувати додавання"
 @bot.message_handler(commands=['start'])
 @error_handler
 def send_welcome(message):
-    logger.info(f"Received /start from chat_id: {message.chat.id}") # ДОДАНО ДЛЯ ДІАГНОСТИКИ
+    logger.info(f"DEBUG: send_welcome handler called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробник команди /start."""
     chat_id = message.chat.id
     if is_user_blocked(chat_id):
@@ -469,11 +472,14 @@ def send_welcome(message):
         "🎯 Аналізую ринок та ціни\n\n"
         "Оберіть дію з меню або просто напишіть мені!"
     )
+    logger.info(f"DEBUG: Attempting to send welcome message to chat_id: {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
     bot.send_message(chat_id, welcome_text, reply_markup=main_menu_markup, parse_mode='Markdown')
+    logger.info(f"DEBUG: Welcome message sent successfully (or attempted) to chat_id: {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @bot.message_handler(commands=['admin'])
 @error_handler
 def admin_panel(message):
+    logger.info(f"DEBUG: admin_panel handler called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробник команди /admin для доступу до адмін-панелі."""
     if message.chat.id != ADMIN_CHAT_ID:
         bot.send_message(message.chat.id, "❌ У вас немає прав доступу.")
@@ -489,6 +495,7 @@ def admin_panel(message):
         types.InlineKeyboardButton("🤖 AI Статистика", callback_data="admin_ai_stats")
     )
     bot.send_message(message.chat.id, "🔧 *Адмін-панель*", reply_markup=markup, parse_mode='Markdown')
+    logger.info(f"DEBUG: Admin panel message sent to chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 # --- 10. Потік додавання товару ---
 ADD_PRODUCT_STEPS = {
@@ -501,6 +508,7 @@ ADD_PRODUCT_STEPS = {
 
 @error_handler
 def start_add_product_flow(message):
+    logger.info(f"DEBUG: start_add_product_flow called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Починає процес додавання нового товару."""
     chat_id = message.chat.id
     user_data[chat_id] = {
@@ -518,6 +526,7 @@ def start_add_product_flow(message):
 
 @error_handler
 def send_product_step_message(chat_id):
+    logger.info(f"DEBUG: send_product_step_message called for chat_id: {chat_id}, step: {user_data[chat_id].get('step_number')}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає користувачу повідомлення для поточного кроку додавання товару."""
     current_step_number = user_data[chat_id]['step_number']
     step_config = ADD_PRODUCT_STEPS[current_step_number]
@@ -538,12 +547,15 @@ def send_product_step_message(chat_id):
     markup.add(cancel_button)
     
     bot.send_message(chat_id, step_config['prompt'], parse_mode='Markdown', reply_markup=markup)
+    logger.info(f"DEBUG: Product step message sent for chat_id: {chat_id}, step: {step_config['name']}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def process_product_step(message):
+    logger.info(f"DEBUG: process_product_step called for chat_id: {message.chat.id}, text: {message.text[:50]}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє текстовий ввід користувача під час додавання товару."""
     chat_id = message.chat.id
     if chat_id not in user_data or 'step_number' not in user_data[chat_id]:
+        logger.warning(f"DEBUG: process_product_step called for user not in flow: {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
         return
 
     current_step_number = user_data[chat_id]['step_number']
@@ -553,18 +565,22 @@ def process_product_step(message):
     if user_text == cancel_button.text:
         del user_data[chat_id]
         bot.send_message(chat_id, "Додавання товару скасовано.", reply_markup=main_menu_markup)
+        logger.info(f"DEBUG: Product add cancelled by user {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
         return
 
     if user_text == back_button.text:
         if step_config['prev_step'] is not None:
             user_data[chat_id]['step_number'] = step_config['prev_step']
             send_product_step_message(chat_id)
+            logger.info(f"DEBUG: User {chat_id} moved back to step {user_data[chat_id]['step_number']}") # ДІАГНОСТИЧНИЙ ЛОГ
         else:
             bot.send_message(chat_id, "Ви вже на першому кроці.")
+            logger.info(f"DEBUG: User {chat_id} tried to go back from first step.") # ДІАГНОСТИЧНИЙ ЛОГ
         return
 
     if step_config.get('allow_skip') and user_text == step_config.get('skip_button'):
         go_to_next_step(chat_id)
+        logger.info(f"DEBUG: User {chat_id} skipped step {step_config['name']}") # ДІАГНОСТИЧНИЙ ЛОГ
         return
 
     if step_config['name'] == 'waiting_name':
@@ -599,6 +615,7 @@ def process_product_step(message):
 
 @error_handler
 def go_to_next_step(chat_id):
+    logger.info(f"DEBUG: go_to_next_step called for chat_id: {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Переводить користувача до наступного кроку в процесі додавання товару."""
     current_step_number = user_data[chat_id]['step_number']
     next_step_number = ADD_PRODUCT_STEPS[current_step_number]['next_step']
@@ -611,6 +628,7 @@ def go_to_next_step(chat_id):
 
 @error_handler
 def process_product_photo(message):
+    logger.info(f"DEBUG: process_product_photo called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє завантаження фотографій товару."""
     chat_id = message.chat.id
     if chat_id in user_data and user_data[chat_id].get('step') == 'waiting_photos':
@@ -626,6 +644,7 @@ def process_product_photo(message):
 
 @error_handler
 def process_product_location(message):
+    logger.info(f"DEBUG: process_product_location called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє надсилання геолокації для товару."""
     chat_id = message.chat.id
     if chat_id in user_data and user_data[chat_id].get('step') == 'waiting_location':
@@ -643,6 +662,7 @@ def process_product_location(message):
 
 @error_handler
 def confirm_and_send_for_moderation(chat_id):
+    logger.info(f"DEBUG: confirm_and_send_for_moderation called for chat_id: {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Зберігає товар у БД, сповіщає користувача та адміністратора про новий товар на модерації."""
     data = user_data[chat_id]['data']
     
@@ -684,6 +704,7 @@ def confirm_and_send_for_moderation(chat_id):
         del user_data[chat_id]
         
         log_statistics('product_added', chat_id, product_id)
+        logger.info(f"DEBUG: Product {product_id} confirmed and sent for moderation by {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
         
     except Exception as e:
         logger.error(f"Помилка збереження товару: {e}", exc_info=True)
@@ -694,6 +715,7 @@ def confirm_and_send_for_moderation(chat_id):
 
 @error_handler
 def send_product_for_admin_review(product_id, data, seller_chat_id, seller_username):
+    logger.info(f"DEBUG: send_product_for_admin_review called for product_id: {product_id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Формує та надсилає повідомлення адміністратору для модерації нового товару."""
     hashtags = generate_hashtags(data['description'])
     review_text = (
@@ -750,6 +772,7 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
             finally:
                 if conn:
                     conn.close()
+        logger.info(f"DEBUG: Product {product_id} sent to admin {ADMIN_CHAT_ID} for review.") # ДІАГНОСТИЧНИЙ ЛОГ
 
     except Exception as e:
         logger.error(f"Помилка при відправці товару {product_id} адміністратору: {e}", exc_info=True)
@@ -759,18 +782,29 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
 @bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'location'])
 @error_handler
 def handle_messages(message):
-    logger.info(f"Received message from chat_id: {message.chat.id}, type: {message.content_type}") # ДОДАНО ДЛЯ ДІАГНОСТИКИ
+    logger.info(f"DEBUG: handle_messages called for chat_id: {message.chat.id}, type: {message.content_type}, text: {message.text[:50] if message.text else 'N/A'}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Основний обробник для всіх вхідних повідомлень."""
     chat_id = message.chat.id
     user_text = message.text if message.content_type == 'text' else ""
 
     if is_user_blocked(chat_id):
         bot.send_message(chat_id, "❌ Ваш акаунт заблоковано.")
+        logger.info(f"DEBUG: User {chat_id} is blocked. Message NOT processed further.") # ДІАГНОСТИЧНИЙ ЛОГ
         return
     
     save_user(message)
+    logger.info(f"DEBUG: User {chat_id} info saved/updated.") # ДІАГНОСТИЧНИЙ ЛОГ
 
+    # Перевіряємо, чи це команда /start. Якщо так, передаємо її відповідному обробнику.
+    # Це необхідно, тому що `commands=['start']` має пріоритет.
+    if message.text == '/start':
+        logger.info(f"DEBUG: Message is /start, dispatching to send_welcome for chat_id: {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
+        send_welcome(message)
+        return
+
+    # Обробка процесу додавання товару (пріоритет)
     if chat_id in user_data and user_data[chat_id].get('step'):
+        logger.info(f"DEBUG: User {chat_id} is in product add flow, current step: {user_data[chat_id].get('step')}") # ДІАГНОСТИЧНИЙ ЛОГ
         if message.content_type == 'text':
             process_product_step(message)
         elif message.content_type == 'photo':
@@ -781,36 +815,49 @@ def handle_messages(message):
             bot.send_message(chat_id, "Будь ласка, дотримуйтесь інструкцій для поточного кроку або натисніть '❌ Скасувати додавання' або '🔙 Назад'.")
         return
 
+    # Обробка кнопок головного меню
     if user_text == "📦 Додати товар":
+        logger.info(f"DEBUG: User {chat_id} clicked 'Add Product'") # ДІАГНОСТИЧНИЙ ЛОГ
         start_add_product_flow(message)
     elif user_text == "📋 Мої товари":
+        logger.info(f"DEBUG: User {chat_id} clicked 'My Products'") # ДІАГНОСТИЧНИЙ ЛОГ
         send_my_products(message)
     elif user_text == "❓ Допомога":
+        logger.info(f"DEBUG: User {chat_id} clicked 'Help'") # ДІАГНОСТИЧНИЙ ЛОГ
         send_help_message(message)
     elif user_text == "💰 Комісія":
+        logger.info(f"DEBUG: User {chat_id} clicked 'Commission'") # ДІАГНОСТИЧНИЙ ЛОГ
         send_commission_info(message)
     elif user_text == "📺 Наш канал":
+        logger.info(f"DEBUG: User {chat_id} clicked 'Our Channel'") # ДІАГНОСТИЧНИЙ ЛОГ
         send_channel_link(message)
     elif user_text == "🤖 AI Помічник":
+        logger.info(f"DEBUG: User {chat_id} clicked 'AI Assistant'") # ДІАГНОСТИЧНИЙ ЛОГ
         bot.send_message(chat_id, "Привіт! Я ваш AI помічник. Задайте мені будь-яке питання про товари, продажі, або просто поспілкуйтесь!\n\n(Напишіть '❌ Скасувати' для виходу з режиму AI чату.)", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, handle_ai_chat)
-    elif message.content_type == 'text':
+    elif message.content_type == 'text': # Якщо це текстове повідомлення і не оброблено вище, передаємо AI
+        logger.info(f"DEBUG: User {chat_id} sent general text for AI: {user_text[:50]}") # ДІАГНОСТИЧНИЙ ЛОГ
         handle_ai_chat(message)
     elif message.content_type == 'photo':
+        logger.info(f"DEBUG: User {chat_id} sent photo outside flow.") # ДІАГНОСТИЧНИЙ ЛОГ
         bot.send_message(chat_id, "Я отримав ваше фото, але не знаю, що з ним робити поза процесом додавання товару. 🤔")
     elif message.content_type == 'location':
+        logger.info(f"DEBUG: User {chat_id} sent location outside flow.") # ДІАГНОСТИЧНИЙ ЛОГ
         bot.send_message(chat_id, f"Я бачу вашу геоточку: {message.location.latitude}, {message.location.longitude}. Як я можу її використати?")
     else:
+        logger.info(f"DEBUG: User {chat_id} sent unhandled message type: {message.content_type}") # ДІАГНОСТИЧНИЙ ЛОГ
         bot.send_message(chat_id, "Я не зрозумів ваш запит. Спробуйте використати кнопки меню.")
 
 @error_handler
 def handle_ai_chat(message):
+    logger.info(f"DEBUG: handle_ai_chat called for chat_id: {message.chat.id}, text: {message.text[:50]}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє повідомлення в режимі AI чату."""
     chat_id = message.chat.id
     user_text = message.text
 
     if user_text == "❌ Скасувати":
         bot.send_message(chat_id, "Чат з AI скасовано.", reply_markup=main_menu_markup)
+        logger.info(f"DEBUG: AI chat cancelled by user {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
         return
 
     save_conversation(chat_id, user_text, 'user')
@@ -823,15 +870,18 @@ def handle_ai_chat(message):
     markup.add(types.KeyboardButton("❌ Скасувати"))
     bot.send_message(chat_id, f"🤖 Думаю...\n{ai_reply}", reply_markup=markup)
     bot.register_next_step_handler(message, handle_ai_chat)
+    logger.info(f"DEBUG: AI reply sent to {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 # --- 12. Список товарів користувача (ОНОВЛЕНО ДЛЯ PostgreSQL) ---
 @error_handler
 def send_my_products(message):
+    logger.info(f"DEBUG: send_my_products called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає користувачу список його товарів."""
     chat_id = message.chat.id
     conn = get_db_connection()
     if not conn:
         bot.send_message(chat_id, "❌ Не вдалося отримати список ваших товарів (помилка БД).")
+        logger.error(f"DEBUG: Failed to get DB connection for user products {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
         return
     cur = conn.cursor()
     try:
@@ -881,12 +931,15 @@ def send_my_products(message):
             
             response += "\n"
         bot.send_message(chat_id, response, parse_mode='Markdown', disable_web_page_preview=True)
+        logger.info(f"DEBUG: User products list sent to {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
     else:
         bot.send_message(chat_id, "📭 Ви ще не додавали жодних товарів.\n\nНатисніть '📦 Додати товар' щоб створити своє перше оголошення!")
+        logger.info(f"DEBUG: No products found for user {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 # --- 13. Допомога та Канал ---
 @error_handler
 def send_help_message(message):
+    logger.info(f"DEBUG: send_help_message called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає користувачу довідкову інформацію."""
     help_text = (
         "🆘 *Довідка*\n\n"
@@ -900,9 +953,11 @@ def send_help_message(message):
         f"Якщо виникли технічні проблеми, зверніться до адміністратора: @{'AdminUsername'}"
     )
     bot.send_message(message.chat.id, help_text, parse_mode='Markdown', reply_markup=main_menu_markup)
+    logger.info(f"DEBUG: Help message sent to {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def send_commission_info(message):
+    logger.info(f"DEBUG: send_commission_info called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає користувачу інформацію про комісію."""
     commission_rate_percent = 10
     text = (
@@ -914,9 +969,11 @@ def send_commission_info(message):
         f"Детальніше про ваші поточні нарахування та сплати можна буде дізнатися в розділі 'Мої товари'."
     )
     bot.send_message(message.chat.id, text, parse_mode='Markdown', reply_markup=main_menu_markup)
+    logger.info(f"DEBUG: Commission info sent to {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def send_channel_link(message):
+    logger.info(f"DEBUG: send_channel_link called for chat_id: {message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає посилання на канал."""
     chat_id = message.chat.id
     try:
@@ -951,6 +1008,7 @@ def send_channel_link(message):
         )
         bot.send_message(chat_id, invite_text, parse_mode='Markdown', disable_web_page_preview=True)
         log_statistics('channel_visit', chat_id)
+        logger.info(f"DEBUG: Channel link sent to {chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
     except Exception as e:
         logger.error(f"Помилка при отриманні або формуванні посилання на канал: {e}", exc_info=True)
@@ -961,6 +1019,7 @@ def send_channel_link(message):
 @bot.callback_query_handler(func=lambda call: True)
 @error_handler
 def callback_inline(call):
+    logger.info(f"DEBUG: callback_inline called for chat_id: {call.message.chat.id}, data: {call.data}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє всі інлайн-кнопки."""
     if call.data.startswith('admin_'):
         handle_admin_callbacks(call)
@@ -974,6 +1033,7 @@ def callback_inline(call):
 # --- 15. Callbacks для Адмін-панелі (ОНОВЛЕНО ДЛЯ PostgreSQL) ---
 @error_handler
 def handle_admin_callbacks(call):
+    logger.info(f"DEBUG: handle_admin_callbacks called for chat_id: {call.message.chat.id}, action: {call.data.split('_')[1]}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє колбеки, пов'язані з адмін-панеллю."""
     if call.message.chat.id != ADMIN_CHAT_ID:
         bot.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -1001,6 +1061,7 @@ def handle_admin_callbacks(call):
 
 @error_handler
 def send_admin_statistics(call):
+    logger.info(f"DEBUG: send_admin_statistics called for chat_id: {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає адміністратору статистику бота."""
     conn = get_db_connection()
     if not conn:
@@ -1048,9 +1109,11 @@ def send_admin_statistics(call):
 
     bot.edit_message_text(stats_text, call.message.chat.id, call.message.message_id,
                          parse_mode='Markdown', reply_markup=markup)
+    logger.info(f"DEBUG: Admin stats sent to {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def send_users_list(call):
+    logger.info(f"DEBUG: send_users_list called for chat_id: {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає адміністратору список користувачів."""
     conn = get_db_connection()
     if not conn:
@@ -1083,9 +1146,11 @@ def send_users_list(call):
 
     bot.edit_message_text(response_text, call.message.chat.id, call.message.message_id,
                          parse_mode='Markdown', reply_markup=markup)
+    logger.info(f"DEBUG: Users list sent to {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def process_user_for_block_unblock(message):
+    logger.info(f"DEBUG: process_user_for_block_unblock called for chat_id: {message.chat.id}, target: {message.text[:50]}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє введення користувача для блокування/розблокування."""
     admin_chat_id = message.chat.id
     target_identifier = message.text.strip()
@@ -1143,9 +1208,11 @@ def process_user_for_block_unblock(message):
     finally:
         if conn:
             conn.close()
+    logger.info(f"DEBUG: User block/unblock flow for {target_chat_id} processed by admin {admin_chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def handle_user_block_callbacks(call):
+    logger.info(f"DEBUG: handle_user_block_callbacks called for chat_id: {call.message.chat.id}, data: {call.data}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє колбеки блокування/розблокування користувачів."""
     admin_chat_id = call.message.chat.id
     data_parts = call.data.split('_')
@@ -1179,9 +1246,11 @@ def handle_user_block_callbacks(call):
             bot.edit_message_text(f"❌ Помилка при розблокуванні користувача з ID `{target_chat_id}`.",
                                   chat_id=admin_chat_id, message_id=call.message.message_id, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
+    logger.info(f"DEBUG: User block/unblock callback processed for {target_chat_id} by admin {admin_chat_id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def send_pending_products_for_moderation(call):
+    logger.info(f"DEBUG: send_pending_products_for_moderation called for chat_id: {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає адміністратору товари, що очікують модерації."""
     conn = get_db_connection()
     if not conn:
@@ -1210,6 +1279,7 @@ def send_pending_products_for_moderation(call):
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🔙 Назад до Адмін-панелі", callback_data="admin_panel_main"))
         bot.edit_message_text(response_text, call.message.chat.id, call.message.message_id, reply_markup=markup)
+        logger.info(f"DEBUG: No pending products for moderation for admin {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
         return
 
     for product in pending_products:
@@ -1251,6 +1321,7 @@ def send_pending_products_for_moderation(call):
                 bot.send_message(call.message.chat.id, admin_message_text,
                                    parse_mode='Markdown',
                                    reply_markup=markup_admin)
+            logger.info(f"DEBUG: Sent pending product {product_id} for admin review to {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
         except Exception as e:
             logger.error(f"Помилка при відправці товару {product_id} на модерацію адміністратору: {e}", exc_info=True)
             bot.send_message(call.message.chat.id, f"❌ Не вдалося відправити товар {product_id} для модерації.")
@@ -1261,6 +1332,7 @@ def send_pending_products_for_moderation(call):
 
 @error_handler
 def send_admin_commissions_info(call):
+    logger.info(f"DEBUG: send_admin_commissions_info called for chat_id: {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає адміністратору інформацію про комісії."""
     conn = get_db_connection()
     if not conn:
@@ -1317,9 +1389,11 @@ def send_admin_commissions_info(call):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🔙 Назад до Адмін-панелі", callback_data="admin_panel_main"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    logger.info(f"DEBUG: Admin commissions info sent to {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 @error_handler
 def send_admin_ai_statistics(call):
+    logger.info(f"DEBUG: send_admin_ai_statistics called for chat_id: {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Надсилає адміністратору статистику використання AI."""
     conn = get_db_connection()
     if not conn:
@@ -1383,11 +1457,13 @@ def send_admin_ai_statistics(call):
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton("🔙 Назад до Адмін-панелі", callback_data="admin_panel_main"))
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=markup)
+    logger.info(f"DEBUG: Admin AI stats sent to {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 
 # --- 16. Callbacks для модерації товару (ОНОВЛЕНО ДЛЯ PostgreSQL) ---
 @error_handler
 def handle_product_moderation_callbacks(call):
+    logger.info(f"DEBUG: handle_product_moderation_callbacks called for chat_id: {call.message.chat.id}, data: {call.data}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Обробляє колбеки схвалення/відхилення/продажу товару."""
     if call.message.chat.id != ADMIN_CHAT_ID:
         bot.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -1479,12 +1555,13 @@ def handle_product_moderation_callbacks(call):
                     bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=markup_sold)
                 else:
                     bot.send_message(call.message.chat.id, f"✅ Товар *'{product_name}'* (ID: {product_id}) опубліковано.")
+                logger.info(f"DEBUG: Product {product_id} approved and published by admin {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
             else:
                 raise Exception("Не вдалося опублікувати повідомлення в канал.")
 
         elif action == 'reject':
-            if current_status != 'pending':
+            if current_status != 'pending': # Змінено з 'pending' на 'approved' для можливості відхилення вже опублікованих
                 bot.answer_callback_query(call.id, f"Товар не на модерації або вже відхилено (поточний статус: '{current_status}').")
                 return
 
@@ -1506,6 +1583,7 @@ def handle_product_moderation_callbacks(call):
                 bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=None)
             else:
                 bot.send_message(call.message.chat.id, f"❌ Товар *'{product_name}'* (ID: {product_id}) відхилено.")
+            logger.info(f"DEBUG: Product {product_id} rejected by admin {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
 
         elif action == 'sold':
@@ -1544,6 +1622,7 @@ def handle_product_moderation_callbacks(call):
                         bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=None)
                     else:
                         bot.send_message(call.message.chat.id, f"💰 Товар *'{product_name}'* (ID: {product_id}) відмічено як проданий.")
+                    logger.info(f"DEBUG: Product {product_id} marked as sold by admin {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
 
                 except telebot.apihelper.ApiTelegramException as e:
                     logger.error(f"Помилка при відмітці товару {product_id} як проданого в каналі: {e}", exc_info=True)
@@ -1565,6 +1644,7 @@ def handle_product_moderation_callbacks(call):
 @bot.callback_query_handler(func=lambda call: call.data == "admin_panel_main")
 @error_handler
 def back_to_admin_panel(call):
+    logger.info(f"DEBUG: back_to_admin_panel called for chat_id: {call.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
     """Повертає адміністратора до головного меню адмін-панелі."""
     if call.message.chat.id != ADMIN_CHAT_ID:
         bot.answer_callback_query(call.id, "❌ Доступ заборонено.")
@@ -1584,6 +1664,7 @@ def back_to_admin_panel(call):
                           chat_id=call.message.chat.id, message_id=call.message.message_id,
                           reply_markup=markup, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
+    logger.info(f"DEBUG: Admin {call.message.chat.id} returned to main panel.") # ДІАГНОСТИЧНИЙ ЛОГ
 
 # --- 18. Запуск бота та налаштування вебхука для Render ---
 
@@ -1614,8 +1695,17 @@ def webhook_receiver():
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
+        
+        # Перевіряємо, чи є повідомлення у цьому оновленні
+        if update.message:
+            logger.info(f"DEBUG: Webhook received message update from {update.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
+        elif update.callback_query:
+            logger.info(f"DEBUG: Webhook received callback query update from {update.callback_query.message.chat.id}") # ДІАГНОСТИЧНИЙ ЛОГ
+        else:
+            logger.info(f"DEBUG: Webhook received unknown update type: {update}") # ДІАГНОСТИЧНИЙ ЛОГ
+
         bot.process_new_updates([update])
-        logger.info(f"Received webhook update: {json_string[:100]}...")
+        logger.info(f"Received webhook update processed by pyTelegramBotAPI: {json_string[:100]}...")
         return '!', 200
     else:
         logger.warning("Received non-JSON request on webhook path. Ignoring.")
