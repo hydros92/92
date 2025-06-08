@@ -1,9 +1,8 @@
 pyTelegramBotAPI
 requests
 python-dotenv
+psycopg2-binary
+APScheduler
 Flask
 gunicorn
-# Якщо ви використовуєте планувальник завдань, розкоментуйте:
-# APScheduler
-# Якщо ви використовуєте PostgreSQL (замість SQLite), розкоментуйте:
-# psycopg2-binary
+psycopg2-binary
