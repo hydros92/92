@@ -2,7 +2,7 @@ import os
 import telebot
 from telebot import types
 import logging
-from datetime import datetime, timedelta, timezone # Додано timezone
+from datetime import datetime, timedelta, timezone
 import re
 import json
 import requests
@@ -13,34 +13,25 @@ from flask import Flask, request
 
 # Імпорти для PostgreSQL (замість sqlite3)
 import psycopg2
-from psycopg2 import sql as pg_sql # Для безпечного формування SQL-запитів
-from psycopg2 import extras # Для роботи з словниками (DictCursor)
-
-# Імпорт для BackgroundScheduler (якщо потрібно для фонових завдань)
-# from apscheduler.schedulers.background import BackgroundScheduler
-# import time # Якщо використовується time.sleep
+from psycopg2 import sql as pg_sql
+from psycopg2 import extras
 
 # Завантажуємо змінні оточення з файлу .env
 load_dotenv()
 
 # --- 1. Конфігурація Бота ---
-# Отримуємо змінні оточення або використовуємо значення за замовчуванням (тільки для розробки!)
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID'))
 CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
 MONOBANK_CARD_NUMBER = os.getenv('MONOBANK_CARD_NUMBER')
 RAPIDAPI_KEY = os.getenv('RAPIDAPI_KEY')
-RAPIDAPI_HOST = "free-football-soccer-v1.p.rapidapi.com" # Перевірте цей HOST на RapidAPI!
+RAPIDAPI_HOST = "free-football-soccer-v1.p.rapidapi.com"
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
-# URL вебхука для Render (буде встановлено у змінних оточення Render)
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-
-# URL бази даних PostgreSQL (з Neon або внутрішньої БД Render)
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-# Базова перевірка наявності основних змінних
 if not TOKEN:
     print("Помилка: TELEGRAM_BOT_TOKEN не встановлено у змінних оточення. Вихід.")
     exit(1)
@@ -52,15 +43,14 @@ if not DATABASE_URL:
     exit(1)
 
 bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__) # !!! Ініціалізуємо Flask-додаток глобально ТІЛЬКИ ОДИН РАЗ !!!
+app = Flask(__name__)
 
 # --- 2. Конфігурація логування ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler() # Виводимо логи в консоль для Render
-        # logging.FileHandler("bot.log", encoding='utf-8') # Закоментовано, оскільки файлова система на Render Free Tier ефемерна
+        logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
@@ -69,7 +59,6 @@ logger = logging.getLogger(__name__)
 def get_db_connection():
     """Встановлює з'єднання з базою даних PostgreSQL."""
     try:
-        # Використання DictCursor для отримання результатів у вигляді словників
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.DictCursor)
         return conn
     except Exception as e:
@@ -167,15 +156,12 @@ def init_db():
             logger.info("Таблиці бази даних успішно ініціалізовано або вже існують.")
     except Exception as e:
         logger.critical(f"Критична помилка ініціалізації бази даних: {e}", exc_info=True)
-        # Вихід з програми, якщо БД не ініціалізовано
-        # На Render, може бути краще не виходити, а просто логувати помилку
-        # exit(1) 
     finally:
         if conn:
             conn.close()
 
 # --- 4. Зберігання даних користувача для багатошагових процесів ---
-user_data = {} # Це залишиться, оскільки це тимчасові дані для поточного сеансу
+user_data = {}
 
 # --- 5. Декоратор для обробки помилок ---
 def error_handler(func):
@@ -253,7 +239,7 @@ def is_user_blocked(chat_id):
         return result and result['is_blocked']
     except Exception as e:
         logger.error(f"Помилка перевірки блокування для {chat_id}: {e}", exc_info=True)
-        return True # Вважаємо заблокованим у разі помилки для безпеки
+        return True
     finally:
         if conn:
             conn.close()
@@ -265,12 +251,12 @@ def set_user_block_status(admin_id, chat_id, status):
     if not conn: return False
     try:
         cur = conn.cursor()
-        if status: # Блокування
+        if status:
             cur.execute(pg_sql.SQL("""
                 UPDATE users SET is_blocked = TRUE, blocked_by = %s, blocked_at = CURRENT_TIMESTAMP
                 WHERE chat_id = %s;
             """), (admin_id, chat_id))
-        else: # Розблокування
+        else:
             cur.execute(pg_sql.SQL("""
                 UPDATE users SET is_blocked = FALSE, blocked_by = NULL, blocked_at = NULL
                 WHERE chat_id = %s;
@@ -338,13 +324,11 @@ def get_gemini_response(prompt, conversation_history=None):
     Допомагай з питаннями про товари, покупки, продажі, переговори.
     Відповідай українською мовою."""
 
-    # Форматуємо історію розмов для Gemini API
-    # Gemini API очікує формат: [{"role": "user", "parts": [{"text": "..."}]}, {"role": "model", "parts": [{"text": "..."}]}]
     gemini_messages = [{"role": "user", "parts": [{"text": system_prompt}]}]
     
     if conversation_history:
         for msg in conversation_history:
-            role = "user" if msg["sender_type"] == 'user' else "model" # Gemini API uses 'model' for AI
+            role = "user" if msg["sender_type"] == 'user' else "model"
             gemini_messages.append({"role": role, "parts": [{"text": msg["message_text"]}]})
     
     gemini_messages.append({"role": "user", "parts": [{"text": prompt}]})
@@ -357,7 +341,7 @@ def get_gemini_response(prompt, conversation_history=None):
         api_url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
 
         response = requests.post(api_url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status() # Викличе HTTPError для 4xx/5xx відповідей
+        response.raise_for_status()
         
         data = response.json()
         if data.get("candidates") and len(data["candidates"]) > 0 and \
@@ -438,7 +422,6 @@ def get_conversation_history(chat_id, limit=5):
         '''), (chat_id, limit))
         results = cur.fetchall()
         
-        # Повертаємо row['message_text'] та row['sender_type']
         history = [{"message_text": row['message_text'], "sender_type": row['sender_type']} 
                    for row in reversed(results)]
         
@@ -464,6 +447,7 @@ cancel_button = types.KeyboardButton("❌ Скасувати додавання"
 @bot.message_handler(commands=['start'])
 @error_handler
 def send_welcome(message):
+    logger.info(f"Received /start from chat_id: {message.chat.id}") # ДОДАНО ДЛЯ ДІАГНОСТИКИ
     """Обробник команди /start."""
     chat_id = message.chat.id
     if is_user_blocked(chat_id):
@@ -519,8 +503,6 @@ ADD_PRODUCT_STEPS = {
 def start_add_product_flow(message):
     """Починає процес додавання нового товару."""
     chat_id = message.chat.id
-    # Ліміт на кількість товарів на модерації знято.
-
     user_data[chat_id] = {
         'step_number': 1, 
         'data': {
@@ -543,7 +525,6 @@ def send_product_step_message(chat_id):
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     
-    # Додаємо кнопки "Далі" та "Пропустити" для фото та локації
     if step_config['name'] == 'waiting_photos':
         markup.add(types.KeyboardButton("Далі"))
         markup.add(types.KeyboardButton(step_config['skip_button']))
@@ -551,11 +532,9 @@ def send_product_step_message(chat_id):
         markup.add(types.KeyboardButton("📍 Надіслати геолокацію", request_location=True))
         markup.add(types.KeyboardButton(step_config['skip_button']))
     
-    # Додаємо кнопку "Назад", якщо це не перший крок
     if step_config['prev_step'] is not None:
         markup.add(back_button)
     
-    # Завжди додаємо кнопку "Скасувати додавання"
     markup.add(cancel_button)
     
     bot.send_message(chat_id, step_config['prompt'], parse_mode='Markdown', reply_markup=markup)
@@ -565,22 +544,17 @@ def process_product_step(message):
     """Обробляє текстовий ввід користувача під час додавання товару."""
     chat_id = message.chat.id
     if chat_id not in user_data or 'step_number' not in user_data[chat_id]:
-        # Якщо бот отримав повідомлення від користувача, який не знаходиться в процесі додавання товару,
-        # то це може бути випадкове повідомлення або повторний виклик обробника.
-        # Просто ігноруємо, бо основний handle_messages обробляє інші сценарії.
         return
 
     current_step_number = user_data[chat_id]['step_number']
     step_config = ADD_PRODUCT_STEPS[current_step_number]
     user_text = message.text if message.content_type == 'text' else ""
 
-    # Обробка скасування
     if user_text == cancel_button.text:
         del user_data[chat_id]
         bot.send_message(chat_id, "Додавання товару скасовано.", reply_markup=main_menu_markup)
         return
 
-    # Обробка кнопки "Назад"
     if user_text == back_button.text:
         if step_config['prev_step'] is not None:
             user_data[chat_id]['step_number'] = step_config['prev_step']
@@ -589,12 +563,10 @@ def process_product_step(message):
             bot.send_message(chat_id, "Ви вже на першому кроці.")
         return
 
-    # Обробка пропуску кроку
     if step_config.get('allow_skip') and user_text == step_config.get('skip_button'):
         go_to_next_step(chat_id)
         return
 
-    # Валідація та збереження даних для кожного кроку
     if step_config['name'] == 'waiting_name':
         if user_text and 3 <= len(user_text) <= 100:
             user_data[chat_id]['data']['product_name'] = user_text
@@ -610,13 +582,12 @@ def process_product_step(message):
             bot.send_message(chat_id, "Будь ласка, вкажіть ціну (до 50 символів):")
 
     elif step_config['name'] == 'waiting_photos':
-        if user_text == "Далі": # Якщо користувач натиснув "Далі" після додавання фото
+        if user_text == "Далі":
             go_to_next_step(chat_id)
         else:
             bot.send_message(chat_id, "Надішліть фото або натисніть 'Далі'/'Пропустити фото'.")
 
     elif step_config['name'] == 'waiting_location':
-        # Якщо користувач ввів текст замість локації або пропуску
         bot.send_message(chat_id, "Надішліть геолокацію або натисніть 'Пропустити геолокацію'.")
 
     elif step_config['name'] == 'waiting_description':
@@ -651,7 +622,6 @@ def process_product_photo(message):
         else:
             bot.send_message(chat_id, "Максимум 5 фото. Натисніть 'Далі' для продовження.")
     else:
-        # Якщо бот отримав фото не на кроці "waiting_photos"
         bot.send_message(chat_id, "Будь ласка, надсилайте фотографії тільки на відповідному кроці.")
 
 @error_handler
@@ -659,7 +629,7 @@ def process_product_location(message):
     """Обробляє надсилання геолокації для товару."""
     chat_id = message.chat.id
     if chat_id in user_data and user_data[chat_id].get('step') == 'waiting_location':
-        if message.location: # Перевіряємо, чи це дійсно геолокація
+        if message.location:
             user_data[chat_id]['data']['geolocation'] = {
                 'latitude': message.location.latitude,
                 'longitude': message.location.longitude
@@ -669,7 +639,6 @@ def process_product_location(message):
         else:
             bot.send_message(chat_id, "Будь ласка, надішліть геолокацію через відповідну кнопку, або натисніть 'Пропустити геолокацію'.")
     else:
-        # Якщо бот отримав локацію не на кроці "waiting_location"
         bot.send_message(chat_id, "Будь ласка, надсилайте геолокацію тільки на відповідному кроці.")
 
 @error_handler
@@ -702,19 +671,16 @@ def confirm_and_send_for_moderation(chat_id):
             json.dumps(data['geolocation']) if data['geolocation'] else None
         ))
         
-        product_id = cur.fetchone()[0] # Отримуємо ID вставленого товару
+        product_id = cur.fetchone()[0]
         conn.commit()
         
-        # Сповіщення користувача
         bot.send_message(chat_id, 
             f"✅ Товар '{data['product_name']}' відправлено на модерацію!\n"
             f"Ви отримаєте сповіщення після перевірки.",
             reply_markup=main_menu_markup)
         
-        # Сповіщення адміністратора
         send_product_for_admin_review(product_id, data, seller_chat_id=chat_id, seller_username=seller_username)
         
-        # Очищуємо дані користувача
         del user_data[chat_id]
         
         log_statistics('product_added', chat_id, product_id)
@@ -735,7 +701,7 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
         f"🆔 ID: {product_id}\n"
         f"📝 Назва: {data['product_name']}\n"
         f"💰 Ціна: {data['price']}\n"
-        f"📄 Опис: {data['description'][:500]}...\n" # Обрізаємо опис для адмін-панелі
+        f"📄 Опис: {data['description'][:500]}...\n"
         f"📸 Фото: {len(data['photos'])} шт.\n"
         f"📍 Геолокація: {'Так' if data['geolocation'] else 'Ні'}\n"
         f"🏷️️ Хештеги: {hashtags}\n\n"
@@ -751,30 +717,22 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
     try:
         admin_msg = None
         if data['photos']:
-            # Надсилаємо фотографії як медіа-групу
-            # Підпис додається лише до першого фото в групі
             media = [types.InputMediaPhoto(photo_id, caption=review_text if i == 0 else None, parse_mode='Markdown') 
                      for i, photo_id in enumerate(data['photos'])]
             
             sent_messages = bot.send_media_group(ADMIN_CHAT_ID, media)
             
-            # Телеграм API не дозволяє додавати reply_markup до InputMediaPhoto.
-            # Тому ми надсилаємо кнопки модерації окремим повідомленням.
-            # Зберігаємо ID цього окремого повідомлення для подальших редагувань.
             if sent_messages:
-                # Відправляємо кнопки окремим повідомленням, що відповідає на перше фото з групи
                 admin_msg = bot.send_message(ADMIN_CHAT_ID, 
                                              f"👆 Деталі товару ID: {product_id} (фото вище)", 
                                              reply_markup=markup, 
                                              parse_mode='Markdown',
                                              reply_to_message_id=sent_messages[0].message_id)
             else:
-                # Якщо з якоїсь причини медіа-група не відправилася, надсилаємо текст з кнопками
                 admin_msg = bot.send_message(ADMIN_CHAT_ID, review_text,
                                            parse_mode='Markdown',
                                            reply_markup=markup)
         else:
-            # Немає фото, надсилаємо повідомлення з текстом та кнопками
             admin_msg = bot.send_message(ADMIN_CHAT_ID, review_text,
                                        parse_mode='Markdown',
                                        reply_markup=markup)
@@ -784,7 +742,6 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
             if not conn: return
             cur = conn.cursor()
             try:
-                # Зберігаємо message_id повідомлення, яке містить кнопки модерації
                 cur.execute(pg_sql.SQL("UPDATE products SET admin_message_id = %s WHERE id = %s;"),
                                (admin_msg.message_id, product_id))
                 conn.commit()
@@ -802,6 +759,7 @@ def send_product_for_admin_review(product_id, data, seller_chat_id, seller_usern
 @bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'location'])
 @error_handler
 def handle_messages(message):
+    logger.info(f"Received message from chat_id: {message.chat.id}, type: {message.content_type}") # ДОДАНО ДЛЯ ДІАГНОСТИКИ
     """Основний обробник для всіх вхідних повідомлень."""
     chat_id = message.chat.id
     user_text = message.text if message.content_type == 'text' else ""
@@ -810,9 +768,8 @@ def handle_messages(message):
         bot.send_message(chat_id, "❌ Ваш акаунт заблоковано.")
         return
     
-    save_user(message) # Оновлено: тепер приймає message для збереження chat_id
+    save_user(message)
 
-    # Обробка процесу додавання товару (пріоритет)
     if chat_id in user_data and user_data[chat_id].get('step'):
         if message.content_type == 'text':
             process_product_step(message)
@@ -822,9 +779,8 @@ def handle_messages(message):
             process_product_location(message)
         else:
             bot.send_message(chat_id, "Будь ласка, дотримуйтесь інструкцій для поточного кроку або натисніть '❌ Скасувати додавання' або '🔙 Назад'.")
-        return # Важливо, щоб не перейти до обробки AI або кнопок меню
+        return
 
-    # Обробка кнопок головного меню
     if user_text == "📦 Додати товар":
         start_add_product_flow(message)
     elif user_text == "📋 Мої товари":
@@ -838,8 +794,7 @@ def handle_messages(message):
     elif user_text == "🤖 AI Помічник":
         bot.send_message(chat_id, "Привіт! Я ваш AI помічник. Задайте мені будь-яке питання про товари, продажі, або просто поспілкуйтесь!\n\n(Напишіть '❌ Скасувати' для виходу з режиму AI чату.)", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, handle_ai_chat)
-    elif message.content_type == 'text': # Якщо це текстове повідомлення і не оброблено вище, передаємо AI
-        # Якщо користувач просто пише текст поза меню, припускаємо, що це для AI
+    elif message.content_type == 'text':
         handle_ai_chat(message)
     elif message.content_type == 'photo':
         bot.send_message(chat_id, "Я отримав ваше фото, але не знаю, що з ним робити поза процесом додавання товару. 🤔")
@@ -854,12 +809,11 @@ def handle_ai_chat(message):
     chat_id = message.chat.id
     user_text = message.text
 
-    if user_text == "❌ Скасувати": # Додаємо можливість скасувати AI чат
+    if user_text == "❌ Скасувати":
         bot.send_message(chat_id, "Чат з AI скасовано.", reply_markup=main_menu_markup)
         return
 
     save_conversation(chat_id, user_text, 'user')
-    # Отримуємо історію розмов у потрібному форматі для Gemini
     conversation_history = get_conversation_history(chat_id, limit=10) 
     
     ai_reply = get_gemini_response(user_text, conversation_history)
@@ -868,7 +822,7 @@ def handle_ai_chat(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(types.KeyboardButton("❌ Скасувати"))
     bot.send_message(chat_id, f"🤖 Думаю...\n{ai_reply}", reply_markup=markup)
-    bot.register_next_step_handler(message, handle_ai_chat) # Продовжуємо AI чат
+    bot.register_next_step_handler(message, handle_ai_chat)
 
 # --- 12. Список товарів користувача (ОНОВЛЕНО ДЛЯ PostgreSQL) ---
 @error_handler
@@ -914,7 +868,6 @@ def send_my_products(message):
                 'expired': 'термін дії закінчився'
             }.get(product['status'], product['status'])
 
-            # PostgreSQL TIMESTAMP WITH TIME ZONE повертає datetime об'єкт
             created_at_local = product['created_at'].astimezone(timezone.utc).strftime('%d.%m.%Y %H:%M')
 
             response += f"{i}. {status_emoji.get(product['status'], '❓')} *{product['product_name']}*\n"
@@ -944,14 +897,14 @@ def send_help_message(message):
         "📺 *Наш канал* - переглянути всі актуальні пропозиції.\n"
         "🤖 *AI Помічник* - поспілкуватися з AI.\n\n"
         "🗣️ *Спілкування:* Просто пишіть мені ваші запитання або пропозиції, і мій вбудований AI спробує вам допомогти!\n\n"
-        f"Якщо виникли технічні проблеми, зверніться до адміністратора: @{'AdminUsername'}" # TODO: Замініть на свій username
+        f"Якщо виникли технічні проблеми, зверніться до адміністратора: @{'AdminUsername'}"
     )
     bot.send_message(message.chat.id, help_text, parse_mode='Markdown', reply_markup=main_menu_markup)
 
 @error_handler
 def send_commission_info(message):
     """Надсилає користувачу інформацію про комісію."""
-    commission_rate_percent = 10 # Наприклад, 10%
+    commission_rate_percent = 10
     text = (
         f"💰 *Інформація про комісію*\n\n"
         f"За успішний продаж товару через нашого бота стягується комісія у розмірі **{commission_rate_percent}%** від кінцевої ціни продажу.\n\n"
@@ -967,7 +920,6 @@ def send_channel_link(message):
     """Надсилає посилання на канал."""
     chat_id = message.chat.id
     try:
-        # Перевіряємо, чи CHANNEL_ID взагалі встановлено
         if not CHANNEL_ID:
             raise ValueError("CHANNEL_ID не встановлено у .env. Неможливо сформувати посилання на канал.")
 
@@ -978,15 +930,13 @@ def send_channel_link(message):
         elif chat_info.username:
             channel_link = f"https://t.me/{chat_info.username}"
         else:
-            # Спроба згенерувати тимчасове посилання, якщо публічний username відсутній
             try:
                 invite_link_obj = bot.create_chat_invite_link(CHANNEL_ID, member_limit=1)
                 channel_link = invite_link_obj.invite_link
                 logger.info(f"Згенеровано нове посилання на запрошення для каналу: {channel_link}")
             except telebot.apihelper.ApiTelegramException as e:
                 logger.warning(f"Не вдалося створити посилання на запрошення для каналу {CHANNEL_ID}: {e}")
-                # Якщо не вдалося згенерувати, використовуємо пряме посилання через ID
-                channel_link_part = str(CHANNEL_ID).replace("-100", "") # Для посилання t.me/c/
+                channel_link_part = str(CHANNEL_ID).replace("-100", "")
                 channel_link = f"https://t.me/c/{channel_link_part}"
 
 
@@ -1033,11 +983,11 @@ def handle_admin_callbacks(call):
 
     if action == "stats":
         send_admin_statistics(call)
-    elif action == "pending": # admin_pending
+    elif action == "pending":
         send_pending_products_for_moderation(call)
-    elif action == "users": # admin_users
+    elif action == "users":
         send_users_list(call)
-    elif action == "block": # admin_block
+    elif action == "block":
         bot.edit_message_text("Введіть `chat_id` або `@username` користувача для блокування/розблокування:",
                               chat_id=call.message.chat.id,
                               message_id=call.message.message_id, parse_mode='Markdown')
@@ -1058,18 +1008,15 @@ def send_admin_statistics(call):
         return
     cur = conn.cursor()
     try:
-        # Статистика по товарах
         cur.execute(pg_sql.SQL("SELECT status, COUNT(*) FROM products GROUP BY status;"))
         product_stats = dict(cur.fetchall())
 
-        # Статистика по користувачах
         cur.execute(pg_sql.SQL("SELECT COUNT(*) FROM users;"))
         total_users = cur.fetchone()[0]
 
         cur.execute(pg_sql.SQL("SELECT COUNT(*) FROM users WHERE is_blocked = TRUE;"))
         blocked_users_count = cur.fetchone()[0]
 
-        # Статистика за сьогодні
         today_utc = datetime.now(timezone.utc).date()
         cur.execute(pg_sql.SQL("SELECT COUNT(*) FROM products WHERE DATE(created_at) = %s;"), (today_utc,))
         today_products = cur.fetchone()[0]
@@ -1163,7 +1110,6 @@ def process_user_for_block_unblock(message):
         else:
             try:
                 target_chat_id = int(target_identifier)
-                # Перевіряємо, чи існує користувач з таким chat_id
                 cur.execute(pg_sql.SQL("SELECT chat_id FROM users WHERE chat_id = %s;"), (target_chat_id,))
                 if not cur.fetchone():
                     bot.send_message(admin_chat_id, f"Користувача з ID `{target_chat_id}` не знайдено в базі даних.")
@@ -1274,7 +1220,6 @@ def send_pending_products_for_moderation(call):
         geolocation_data = json.loads(product['geolocation']) if product['geolocation'] else None
         hashtags = generate_hashtags(product['description'])
 
-        # PostgreSQL TIMESTAMP WITH TIME ZONE повертає datetime об'єкт
         created_at_local = product['created_at'].astimezone(timezone.utc).strftime('%d.%m.%Y %H:%M')
 
         admin_message_text = (
@@ -1297,15 +1242,12 @@ def send_pending_products_for_moderation(call):
         
         try:
             if photos:
-                # Надсилаємо фотографії як медіа-групу
                 media = [types.InputMediaPhoto(photo_id, caption=admin_message_text if i == 0 else None, parse_mode='Markdown') 
                          for i, photo_id in enumerate(photos)]
                 bot.send_media_group(call.message.chat.id, media)
                 
-                # Надсилаємо кнопки модерації окремим повідомленням
                 bot.send_message(call.message.chat.id, f"👆 Модерація товару ID: {product_id} (фото вище)", reply_markup=markup_admin, parse_mode='Markdown')
             else:
-                # Немає фото, надсилаємо повідомлення з текстом та кнопками
                 bot.send_message(call.message.chat.id, admin_message_text,
                                    parse_mode='Markdown',
                                    reply_markup=markup_admin)
@@ -1422,7 +1364,7 @@ def send_admin_ai_statistics(call):
         f"📊 *Найактивніші користувачі AI:*\n"
     )
     if top_ai_users:
-        for user_data_row in top_ai_users: # Змінив назву змінної, щоб уникнути конфлікту
+        for user_data_row in top_ai_users:
             user_id = user_data_row['user_chat_id']
             query_count = user_data_row['query_count']
             user_info = bot.get_chat(user_id)
@@ -1433,7 +1375,7 @@ def send_admin_ai_statistics(call):
 
     text += "\n📅 *Запити за останні 7 днів:*\n"
     if daily_ai_queries:
-        for day_data_row in daily_ai_queries: # Змінив назву змінної
+        for day_data_row in daily_ai_queries:
             text += f"- {day_data_row['date']}: {day_data_row['query_count']} запитів\n"
     else:
         text += "  Немає даних.\n"
@@ -1498,7 +1440,6 @@ def handle_product_moderation_callbacks(call):
                 bot.answer_callback_query(call.id, f"Товар вже має статус '{current_status}'.")
                 return
 
-            # Публікація в каналі
             channel_text = (
                 f"📦 *Новий товар: {product_name}*\n\n"
                 f"💰 *Ціна:* {price}\n"
@@ -1510,13 +1451,11 @@ def handle_product_moderation_callbacks(call):
             
             published_message = None
             if photos:
-                # Надсилаємо всі фотографії як медіа-групу з підписом до першого фото
                 media = [types.InputMediaPhoto(photo_id, caption=channel_text if i == 0 else None, parse_mode='Markdown') 
                          for i, photo_id in enumerate(photos)]
                 sent_messages = bot.send_media_group(CHANNEL_ID, media)
-                published_message = sent_messages[0] if sent_messages else None # Зберігаємо перше повідомлення групи
+                published_message = sent_messages[0] if sent_messages else None
             else:
-                # Якщо немає фото, надсилаємо просто текстове повідомлення
                 published_message = bot.send_message(CHANNEL_ID, channel_text, parse_mode='Markdown')
 
             if published_message:
@@ -1532,11 +1471,9 @@ def handle_product_moderation_callbacks(call):
                                  f"✅ Ваш товар '{product_name}' успішно опубліковано в каналі! [Переглянути](https://t.me/c/{str(CHANNEL_ID).replace('-100', '')}/{new_channel_message_id})",
                                  parse_mode='Markdown', disable_web_page_preview=True)
                 
-                # Оновлюємо адмінське повідомлення, яке містило кнопки модерації
                 if admin_message_id:
                     bot.edit_message_text(f"✅ Товар *'{product_name}'* (ID: {product_id}) опубліковано.",
                                           chat_id=call.message.chat.id, message_id=admin_message_id, parse_mode='Markdown')
-                    # Додаємо кнопку "Продано" до адмінського повідомлення
                     markup_sold = types.InlineKeyboardMarkup()
                     markup_sold.add(types.InlineKeyboardButton("💰 Відмітити як продано", callback_data=f"sold_{product_id}"))
                     bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=markup_sold)
@@ -1547,7 +1484,7 @@ def handle_product_moderation_callbacks(call):
                 raise Exception("Не вдалося опублікувати повідомлення в канал.")
 
         elif action == 'reject':
-            if current_status != 'approved': # Змінено з 'pending' на 'approved' для можливості відхилення вже опублікованих
+            if current_status != 'pending':
                 bot.answer_callback_query(call.id, f"Товар не на модерації або вже відхилено (поточний статус: '{current_status}').")
                 return
 
@@ -1563,11 +1500,10 @@ def handle_product_moderation_callbacks(call):
                              "Будь ласка, перевірте оголошення та спробуйте додати знову.",
                              parse_mode='Markdown')
             
-            # Оновлюємо адмінське повідомлення
             if admin_message_id:
                 bot.edit_message_text(f"❌ Товар *'{product_name}'* (ID: {product_id}) відхилено.",
                                       chat_id=call.message.chat.id, message_id=admin_message_id, parse_mode='Markdown')
-                bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=None) # Прибираємо кнопки
+                bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=None)
             else:
                 bot.send_message(call.message.chat.id, f"❌ Товар *'{product_name}'* (ID: {product_id}) відхилено.")
 
@@ -1579,7 +1515,6 @@ def handle_product_moderation_callbacks(call):
 
             if channel_message_id:
                 try:
-                    # Оновлюємо статус в базі даних
                     cur.execute(pg_sql.SQL("""
                         UPDATE products SET status = 'sold', moderator_id = %s, moderated_at = CURRENT_TIMESTAMP
                         WHERE id = %s;
@@ -1587,7 +1522,6 @@ def handle_product_moderation_callbacks(call):
                     conn.commit()
                     log_statistics('product_sold', call.message.chat.id, product_id)
 
-                    # Оновлюємо повідомлення в каналі, додаючи "ПРОДАНО!"
                     sold_text = (
                         f"📦 *ПРОДАНО!* {product_name}\n\n"
                         f"💰 *Ціна:* {price}\n"
@@ -1595,7 +1529,6 @@ def handle_product_moderation_callbacks(call):
                         f"*Цей товар вже продано.*"
                     )
                     
-                    # Оновлюємо повідомлення в каналі (caption для фото, text для без фото)
                     if photos:
                         bot.edit_message_caption(chat_id=CHANNEL_ID, message_id=channel_message_id,
                                                  caption=sold_text, parse_mode='Markdown')
@@ -1605,11 +1538,10 @@ def handle_product_moderation_callbacks(call):
                     
                     bot.send_message(seller_chat_id, f"✅ Ваш товар '{product_name}' відмічено як *'ПРОДАНО'*. Дякуємо за співпрацю!", parse_mode='Markdown')
                     
-                    # Оновлюємо адмінське повідомлення, яке містило кнопку "Продано"
                     if admin_message_id:
                         bot.edit_message_text(f"💰 Товар *'{product_name}'* (ID: {product_id}) відмічено як проданий.",
                                               chat_id=call.message.chat.id, message_id=admin_message_id, parse_mode='Markdown')
-                        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=None) # Прибираємо кнопку "Продано"
+                        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=admin_message_id, reply_markup=None)
                     else:
                         bot.send_message(call.message.chat.id, f"💰 Товар *'{product_name}'* (ID: {product_id}) відмічено як проданий.")
 
@@ -1655,59 +1587,26 @@ def back_to_admin_panel(call):
 
 # --- 18. Запуск бота та налаштування вебхука для Render ---
 
-# Ці рядки повинні виконуватись при імпорті модуля Gunicorn'ом
-# або при локальному запуску.
-# Вони знаходяться тут, щоб Gunicorn їх побачив і виконав при старті додатка.
-
 logger.info("Запуск ініціалізації БД...")
-init_db() # Ініціалізуємо таблиці PostgreSQL
-
-# Встановлюємо вебхук URL для Telegram
-# Це має бути виконано під час запуску додатку Gunicorn'ом
-# WEBHOOK_URL та TOKEN беруться зі змінних оточення
+init_db()
 
 if WEBHOOK_URL and TOKEN:
     try:
-        # Видаляємо попередній вебхук (рекомендовано)
-        # Це важливо, щоб не було конфліктів з попередніми налаштуваннями
         bot.remove_webhook()
-
-        # Встановлюємо новий вебхук. Telegram очікує URL/TOKEN.
         full_webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
         bot.set_webhook(url=full_webhook_url)
         logger.info(f"Webhook встановлено на: {full_webhook_url}")
     except Exception as e:
         logger.critical(f"Критична помилка встановлення webhook: {e}", exc_info=True)
-        # Якщо встановлення вебхука не вдалось, бот не отримуватиме оновлення.
-        # На Render, додаток просто запуститься, але не буде отримувати оновлення.
-        # Ми не викликаємо exit(1) тут, щоб Flask додаток все ж запустився
-        # і Render не відмічав його як "Failed".
         logger.error("Бот не буде отримувати оновлення від Telegram через помилку вебхука.")
 else:
     logger.critical("WEBHOOK_URL або TELEGRAM_BOT_TOKEN не встановлено. Бот не може працювати в режимі webhook.")
-    # Аналогічно, не викликаємо exit(1) тут.
 
-# Запускаємо планувальник фонових завдань (якщо ви його використовуєте)
-# Якщо ви плануєте використовувати APScheduler для періодичних завдань,
-# переконайтеся, що ви ініціалізували 'scheduler = BackgroundScheduler(...)'
-# і додали завдання, як було в старому коді.
-# Наприклад:
-# scheduler = BackgroundScheduler(timezone="UTC") # Використовуйте UTC
-# scheduler.add_job(your_periodic_function, 'interval', minutes=5)
-# scheduler.start()
-# logger.info("Планувальник завдань APScheduler запущено.")
-
-
-# Цей блок `if __name__ == '__main__':` виконується ТІЛЬКИ при локальному запуску `python bot.py`
-# Gunicorn НЕ виконує цей блок, він імпортує `app` безпосередньо.
 if __name__ == '__main__':
     logger.info("Запуск Flask-додатка локально...")
-    # Для локального запуску та відладки
-    port = int(os.environ.get("PORT", 5000)) # Локально можна 5000
-    app.run(host="0.0.0.0", port=port, debug=True) # debug=True для локальної відладки
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
 
-
-# Маршрут для вебхука Telegram
 @app.route(f'/{TOKEN}', methods=['POST'])
 @error_handler
 def webhook_receiver():
@@ -1716,10 +1615,8 @@ def webhook_receiver():
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
         bot.process_new_updates([update])
-        logger.info(f"Received webhook update: {json_string[:100]}...") # Логуємо частину оновлення
+        logger.info(f"Received webhook update: {json_string[:100]}...")
         return '!', 200
     else:
-        # Для здоров'я Render'а, щоб не було 404 на кореневому шляху
         logger.warning("Received non-JSON request on webhook path. Ignoring.")
-        return 'Hello from bot webhook!', 200 # Для перевірки, якщо хтось заходить напряму на URL
-
+        return 'Hello from bot webhook!', 200
