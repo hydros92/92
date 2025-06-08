@@ -168,7 +168,8 @@ def init_db():
     except Exception as e:
         logger.critical(f"Критична помилка ініціалізації бази даних: {e}", exc_info=True)
         # Вихід з програми, якщо БД не ініціалізовано
-        exit(1)
+        # На Render, може бути краще не виходити, а просто логувати помилку
+        # exit(1) 
     finally:
         if conn:
             conn.close()
@@ -1546,8 +1547,8 @@ def handle_product_moderation_callbacks(call):
                 raise Exception("Не вдалося опублікувати повідомлення в канал.")
 
         elif action == 'reject':
-            if current_status != 'pending':
-                bot.answer_callback_query(call.id, f"Товар вже має статус '{current_status}'.")
+            if current_status != 'approved': # Змінено з 'pending' на 'approved' для можливості відхилення вже опублікованих
+                bot.answer_callback_query(call.id, f"Товар не на модерації або вже відхилено (поточний статус: '{current_status}').")
                 return
 
             cur.execute(pg_sql.SQL("""
@@ -1652,47 +1653,73 @@ def back_to_admin_panel(call):
                           reply_markup=markup, parse_mode='Markdown')
     bot.answer_callback_query(call.id)
 
-# --- 18. Запуск бота ---
+# --- 18. Запуск бота та налаштування вебхука для Render ---
+
+# Ці рядки повинні виконуватись при імпорті модуля Gunicorn'ом
+# або при локальному запуску.
+# Вони знаходяться тут, щоб Gunicorn їх побачив і виконав при старті додатка.
+
+logger.info("Запуск ініціалізації БД...")
+init_db() # Ініціалізуємо таблиці PostgreSQL
+
+# Встановлюємо вебхук URL для Telegram
+# Це має бути виконано під час запуску додатку Gunicorn'ом
+# WEBHOOK_URL та TOKEN беруться зі змінних оточення
+
+if WEBHOOK_URL and TOKEN:
+    try:
+        # Видаляємо попередній вебхук (рекомендовано)
+        # Це важливо, щоб не було конфліктів з попередніми налаштуваннями
+        bot.remove_webhook()
+
+        # Встановлюємо новий вебхук. Telegram очікує URL/TOKEN.
+        full_webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
+        bot.set_webhook(url=full_webhook_url)
+        logger.info(f"Webhook встановлено на: {full_webhook_url}")
+    except Exception as e:
+        logger.critical(f"Критична помилка встановлення webhook: {e}", exc_info=True)
+        # Якщо встановлення вебхука не вдалось, бот не отримуватиме оновлення.
+        # На Render, додаток просто запуститься, але не буде отримувати оновлення.
+        # Ми не викликаємо exit(1) тут, щоб Flask додаток все ж запустився
+        # і Render не відмічав його як "Failed".
+        logger.error("Бот не буде отримувати оновлення від Telegram через помилку вебхука.")
+else:
+    logger.critical("WEBHOOK_URL або TELEGRAM_BOT_TOKEN не встановлено. Бот не може працювати в режимі webhook.")
+    # Аналогічно, не викликаємо exit(1) тут.
+
+# Запускаємо планувальник фонових завдань (якщо ви його використовуєте)
+# Якщо ви плануєте використовувати APScheduler для періодичних завдань,
+# переконайтеся, що ви ініціалізували 'scheduler = BackgroundScheduler(...)'
+# і додали завдання, як було в старому коді.
+# Наприклад:
+# scheduler = BackgroundScheduler(timezone="UTC") # Використовуйте UTC
+# scheduler.add_job(your_periodic_function, 'interval', minutes=5)
+# scheduler.start()
+# logger.info("Планувальник завдань APScheduler запущено.")
+
+
+# Цей блок `if __name__ == '__main__':` виконується ТІЛЬКИ при локальному запуску `python bot.py`
+# Gunicorn НЕ виконує цей блок, він імпортує `app` безпосередньо.
 if __name__ == '__main__':
-    logger.info("Запуск ініціалізації БД...")
-    init_db() # Ініціалізуємо таблиці PostgreSQL
-
-    logger.info("Бот запускається...")
-
-    # Запускаємо планувальник фонових завдань (якщо є)
-    # Якщо ви плануєте використовувати APScheduler для періодичних завдань,
-    # переконайтеся, що ви ініціалізували 'scheduler = BackgroundScheduler(...)'
-    # і додали завдання, як було в старому коді.
-    # Наприклад:
-    # scheduler = BackgroundScheduler(timezone="Europe/Kiev")
-    # scheduler.add_job(your_periodic_function, 'interval', minutes=5)
-    # scheduler.start()
-    # logger.info("Планувальник завдань APScheduler запущено.")
+    logger.info("Запуск Flask-додатка локально...")
+    # Для локального запуску та відладки
+    port = int(os.environ.get("PORT", 5000)) # Локально можна 5000
+    app.run(host="0.0.0.0", port=port, debug=True) # debug=True для локальної відладки
 
 
-    # Встановлюємо вебхук URL для Telegram
-    if WEBHOOK_URL and TOKEN:
-        try:
-            # Видаляємо попередній вебхук (рекомендовано)
-            bot.remove_webhook()
-            # Render може зайняти час, щоб проіндексиувати новий деплой.
-            # Немає необхідності в time.sleep тут, Telegram автоматично повторить спробу.
-            
-            # Встановлюємо новий вебхук. Telegram очікує URL/TOKEN, тому їх потрібно об'єднати.
-            full_webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
-            bot.set_webhook(url=full_webhook_url)
-            logger.info(f"Webhook встановлено на: {full_webhook_url}")
-        except Exception as e:
-            logger.critical(f"Критична помилка встановлення webhook: {e}", exc_info=True)
-            # Якщо встановлення вебхука не вдалось, бот не отримуватиме оновлення.
-            # Вихід, оскільки бот не може працювати без вебхука.
-            exit(1)
+# Маршрут для вебхука Telegram
+@app.route(f'/{TOKEN}', methods=['POST'])
+@error_handler
+def webhook_receiver():
+    """Обробляє вхідні оновлення від Telegram."""
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        logger.info(f"Received webhook update: {json_string[:100]}...") # Логуємо частину оновлення
+        return '!', 200
     else:
-        logger.critical("WEBHOOK_URL або TELEGRAM_BOT_TOKEN не встановлено. Бот не може працювати в режимі webhook. Перевірте змінні оточення.")
-        exit(1) # Вихід, якщо немає необхідних змінних для вебхука
-
-    # Запускаємо Flask-додаток. Render встановлює змінну середовища PORT.
-    port = int(os.environ.get("PORT", 10000)) # Змінив порт на 10000, оскільки 5000 може бути зайнятий за замовчуванням
-    logger.info(f"Запуск Flask-додатка на порту {port}...")
-    app.run(host="0.0.0.0", port=port)
+        # Для здоров'я Render'а, щоб не було 404 на кореневому шляху
+        logger.warning("Received non-JSON request on webhook path. Ignoring.")
+        return 'Hello from bot webhook!', 200 # Для перевірки, якщо хтось заходить напряму на URL
 
