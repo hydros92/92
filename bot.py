@@ -2,10 +2,10 @@ import os
 import telebot
 from telebot import types
 import logging
-from datetime import datetime, timedelta, timezone # Keep datetime, timedelta, timezone for completeness if needed later
-import re # Keep re for completeness if needed later
-import json # Keep json for completeness if needed later
-import requests # Keep requests for completeness if needed later
+from datetime import datetime, timedelta, timezone # Keep for completeness if needed later
+import re # Keep for completeness if needed later
+import json # Keep for completeness if needed later
+import requests # Keep for completeness if needed later
 from flask import Flask, request
 import psycopg2
 from psycopg2 import sql as pg_sql
@@ -17,7 +17,6 @@ load_dotenv()
 
 # --- 1. Конфігурація Бота ---
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-# Додаємо захист від ValueError, якщо змінна оточення відсутня
 ADMIN_CHAT_ID = int(os.getenv('ADMIN_CHAT_ID')) if os.getenv('ADMIN_CHAT_ID') else 0
 CHANNEL_ID = int(os.getenv('CHANNEL_ID')) if os.getenv('CHANNEL_ID') else 0
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -28,7 +27,7 @@ GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini
 
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
-# --- 2. Конфігурація логування (Визначено раніше для діагностичних логів) ---
+# --- 2. Конфігурація логування ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -108,7 +107,6 @@ def error_handler(func):
                     chat_id_to_notify = first_arg.message.chat.id
             
             try:
-                # Використовуємо ADMIN_CHAT_ID, лише якщо він коректно встановлений
                 if ADMIN_CHAT_ID:
                     bot.send_message(ADMIN_CHAT_ID, f"🚨 Критична помилка в боті!\nФункція: {func.__name__}\nПомилка: {e}\nДивіться деталі в логах Render.")
                 if chat_id_to_notify and chat_id_to_notify != ADMIN_CHAT_ID:
@@ -120,8 +118,11 @@ def error_handler(func):
 # --- 5. Заглушки для БД-операцій ---
 @error_handler
 def save_user(message_or_user):
-    # Забезпечуємо отримання chat_id для коректного логування
     chat_id = None
+    username = None
+    first_name = None
+    last_name = None
+
     if isinstance(message_or_user, types.Message):
         chat_id = message_or_user.from_user.id
         username = message_or_user.from_user.username
@@ -161,8 +162,7 @@ def log_statistics(action, user_id=None, product_id=None, details=None):
     logger.info(f"DEBUG_STUB: log_statistics called for action: {action}, user: {user_id}")
     pass # В цій діагностичній версії не робить запис до БД
 
-# --- 6. Обробники команд (мінімальні для діагностики) ---
-@bot.message_handler(commands=['start'])
+# --- 6. Обробники команд (без декораторів bot.message_handler) ---
 @error_handler
 def send_welcome(message):
     logger.info(f"DEBUG: send_welcome handler CALLED for chat_id: {message.chat.id}, message_text: '{message.text}'")
@@ -177,7 +177,6 @@ def send_welcome(message):
     bot.send_message(chat_id, welcome_text)
     logger.info(f"DEBUG: Welcome message sent (or attempted) to chat_id: {chat_id}")
 
-@bot.message_handler(commands=['test'])
 @error_handler
 def send_test_message(message):
     logger.info(f"DEBUG: send_test_message handler CALLED for chat_id: {message.chat.id}, message_text: '{message.text}'")
@@ -187,7 +186,6 @@ def send_test_message(message):
     bot.send_message(chat_id, test_text)
     logger.info(f"DEBUG: Test message sent (or attempted) to chat_id: {chat_id}")
 
-@bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'location'])
 @error_handler
 def handle_all_messages(message):
     logger.info(f"DEBUG: handle_all_messages handler CALLED for chat_id: {message.chat.id}, type: {message.content_type}, text: '{message.text[:50] if message.text else 'N/A'}'")
@@ -214,7 +212,7 @@ def handle_all_messages(message):
 logger.info("Запуск ініціалізації БД...")
 init_db()
 
-# Логування кількості зареєстрованих обробників
+# Логування кількості зареєстрованих обробників (буде 0, бо декоратори видалені)
 logger.info(f"DEBUG: Number of message handlers registered: {len(bot.message_handlers)}")
 logger.info(f"DEBUG: Number of callback query handlers registered: {len(bot.callback_query_handlers)}")
 
@@ -241,7 +239,7 @@ if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
 
-# Обробник вебхуків для Flask
+# Обробник вебхуків для Flask (з ручною диспетчеризацією)
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook_receiver():
     """Обробляє вхідні оновлення від Telegram."""
@@ -254,17 +252,29 @@ def webhook_receiver():
             
             if update.message:
                 logger.info(f"DEBUG: Webhook received message update from {update.message.chat.id}, text: '{update.message.text[:50] if update.message.text else 'N/A'}'")
+                
+                # --- РУЧНА ДИСПЕТЧЕРИЗАЦІЯ ---
+                message = update.message
+                if message.text == '/start':
+                    send_welcome(message)
+                elif message.text == '/test':
+                    send_test_message(message)
+                else:
+                    handle_all_messages(message)
+                # --- КІНЕЦЬ РУЧНОЇ ДИСПЕТЧЕРИЗАЦІЇ ---
+
             elif update.callback_query:
                 logger.info(f"DEBUG: Webhook received callback query update from {update.callback_query.message.chat.id}, data: '{update.callback_query.data}'")
+                # Тут можна було б додати ручну диспетчеризацію для callback_inline, якщо вона потрібна
+                # handle_admin_callbacks(update.callback_query) # Залежить від вашого callback_inline функціоналу
             else:
                 logger.info(f"DEBUG: Webhook received unknown update type: {update}")
 
-            logger.info("DEBUG: Attempting to process update with bot.process_new_updates...")
-            bot.process_new_updates([update])
-            logger.info("DEBUG: bot.process_new_updates finished.")
+            # bot.process_new_updates([update]) # ВИДАЛЕНО, тепер ми робимо ручну диспетчеризацію
+            logger.info("DEBUG: Manual update processing finished.")
             return '!', 200
         except Exception as e:
-            logger.critical(f"FATAL ERROR during webhook processing or pyTelegramBotAPI dispatch: {e}", exc_info=True)
+            logger.critical(f"FATAL ERROR during manual webhook processing: {e}", exc_info=True)
             return 'Error processing update', 500
     else:
         logger.warning("Received non-JSON request on webhook path. Ignoring.")
